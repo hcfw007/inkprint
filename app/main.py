@@ -5,7 +5,7 @@ from fastapi import FastAPI, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
-from . import crawler_zhihu, personas, voice_profile
+from . import crawler_zhihu, personas, samples, voice_profile
 from .db import init_db
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -81,6 +81,33 @@ async def add_source(
     if not result["ok"]:
         raise HTTPException(status_code=400, detail=result["error"])
     return RedirectResponse(url=f"/personas/{persona_id}", status_code=303)
+
+
+@app.get("/personas/{persona_id}/samples", response_class=HTMLResponse)
+async def list_samples(request: Request, persona_id: int) -> HTMLResponse:
+    persona = personas.get(persona_id)
+    if persona is None:
+        raise HTTPException(status_code=404, detail="persona not found")
+    return templates.TemplateResponse(
+        request,
+        "samples/list.html",
+        {"persona": persona, "items": samples.list_for(persona_id)},
+    )
+
+
+@app.get("/personas/{persona_id}/samples/{idx}", response_class=HTMLResponse)
+async def show_sample(request: Request, persona_id: int, idx: int) -> HTMLResponse:
+    persona = personas.get(persona_id)
+    if persona is None:
+        raise HTTPException(status_code=404, detail="persona not found")
+    item = samples.get_for(persona_id, idx)
+    if item is None:
+        raise HTTPException(status_code=404, detail="sample not found")
+    return templates.TemplateResponse(
+        request,
+        "samples/show.html",
+        {"persona": persona, "item": item, "idx": idx},
+    )
 
 
 @app.post("/personas/{persona_id}/profile")

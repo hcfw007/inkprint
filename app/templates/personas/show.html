@@ -10,7 +10,10 @@
 
 <h2>{{ persona.name }}</h2>
 {% if persona.description %}<p>{{ persona.description }}</p>{% endif %}
-<p class="muted">创建于 {{ persona.created_at }}</p>
+<p class="muted">
+  创建于 {{ persona.created_at }} ·
+  <a href="/personas/{{ persona.id }}/samples">查看样本</a>
+</p>
 
 <h2>已绑定社媒源</h2>
 {% if sources %}
