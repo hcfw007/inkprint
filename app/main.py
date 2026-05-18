@@ -203,15 +203,13 @@ async def compose_form(request: Request, persona_id: int) -> HTMLResponse:
     persona = personas.get(persona_id)
     if persona is None:
         raise HTTPException(status_code=404, detail="persona not found")
-    bound = personas.bound_platforms(persona_id)
     return templates.TemplateResponse(
         request,
         "personas/compose.html",
         {
             "persona": persona,
-            "bound_platforms": sorted(bound) if bound else ["zhihu"],
             "topic": "",
-            "platform": "",
+            "form_type": voice_profile.FORM_LONG,
             "result": None,
             "error": None,
         },
@@ -223,7 +221,7 @@ async def compose_submit(
     request: Request,
     persona_id: int,
     topic: str = Form(""),
-    platform: str = Form(...),
+    form_type: str = Form(...),
 ) -> HTMLResponse:
     persona = personas.get(persona_id)
     if persona is None:
@@ -233,22 +231,20 @@ async def compose_submit(
     try:
         result = voice_profile.compose(
             persona_id,
-            platform=platform,
+            form_type=form_type,
             topic=topic,
             author_text=persona["author_text"] or "",
             author_goal=persona["author_goal"] or "",
         )
     except voice_profile.ProfileError as e:
         error = str(e)
-    bound = personas.bound_platforms(persona_id)
     return templates.TemplateResponse(
         request,
         "personas/compose.html",
         {
             "persona": persona,
-            "bound_platforms": sorted(bound) if bound else ["zhihu"],
             "topic": topic,
-            "platform": platform,
+            "form_type": form_type,
             "result": result,
             "error": error,
         },

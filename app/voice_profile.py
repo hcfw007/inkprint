@@ -301,34 +301,44 @@ def list_versions(persona_id: int) -> list[ProfileVersion]:
     return versions
 
 
-COMPOSE_LENGTH_HINT = {
-    "zhihu": "200 到 800 字之间，可分段；如果话题适合，用作者偏好的'先抛结论再展开'结构",
-    "weibo": "30 到 280 字，单段更自然；可以用 //@ 转评体或直接表态",
-}
+FORM_LONG = "long"
+FORM_SHORT = "short"
 
-COMPOSE_PLATFORM_LABEL = {"zhihu": "知乎", "weibo": "微博"}
+COMPOSE_FORMS: dict[str, dict[str, str]] = {
+    FORM_LONG: {
+        "label": "长文",
+        "length": "2000 到 4000 字之间，可以分段、用小标题",
+        "images": ("可以在合适的位置用 [图：简短说明] 占位提示配图，建议 1-3 处。占位独占一行。"),
+    },
+    FORM_SHORT: {
+        "label": "短文",
+        "length": "140 字以内，单段更自然",
+        "images": "不要配图，不要写图片占位。",
+    },
+}
 
 
 def compose(
     persona_id: int,
-    platform: str,
+    form_type: str,
     topic: str,
     author_text: str = "",
     author_goal: str = "",
 ) -> str:
-    """Generate a post in the persona's voice for the given platform."""
+    """Generate a post in the persona's voice for the given length type."""
+    if form_type not in COMPOSE_FORMS:
+        raise ProfileError(f"未知文本类型: {form_type}")
     profile_md = read_existing(persona_id)
     if not profile_md:
         raise ProfileError("尚未生成 voice profile，先生成 profile 再来写")
     profile_md = apply_author_overrides(profile_md, author_text, author_goal)
-    label = COMPOSE_PLATFORM_LABEL.get(platform, platform)
-    length_hint = COMPOSE_LENGTH_HINT.get(platform, "长度自定")
     if not topic.strip():
         raise ProfileError("输入文本不能为空")
+    form = COMPOSE_FORMS[form_type]
 
     system = (
         "你是这位作者本人，按下方 VOICE PROFILE 描述的风格写作。严格遵守 Preferred "
-        "Moves，避开 Banned Moves，按 Channel Notes 里对应平台的腔调微调。"
+        "Moves，避开 Banned Moves，参考 Channel Notes 中长度相近的平台腔调融合使用。"
         "输出语言：中文。只输出正文，不要任何解释、标题、前后缀。"
     )
     user = f"""下面是你的 VOICE PROFILE：
@@ -337,8 +347,9 @@ def compose(
 
 ---
 
-现在请以你自己的口吻，为 {label} 平台写一段内容。
-要求长度：{length_hint}。
+现在请以你自己的口吻写一段「{form["label"]}」。
+要求长度：{form["length"]}。
+配图：{form["images"]}
 话题或素材：
 
 {topic.strip()}
