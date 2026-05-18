@@ -82,6 +82,17 @@ def get_source(source_id: int) -> sqlite3.Row | None:
         ).fetchone()
 
 
+def delete(persona_id: int) -> None:
+    """Delete a persona. ON DELETE CASCADE handles source_bindings."""
+    with connect() as conn:
+        conn.execute("DELETE FROM personas WHERE id = ?", (persona_id,))
+
+
+def delete_source(source_id: int) -> None:
+    with connect() as conn:
+        conn.execute("DELETE FROM source_bindings WHERE id = ?", (source_id,))
+
+
 def mark_source_synced(source_id: int, item_count: int, sample_path: str) -> None:
     with connect() as conn:
         conn.execute(

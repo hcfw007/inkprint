@@ -1,3 +1,4 @@
+import shutil
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -9,7 +10,24 @@ from . import crawler_zhihu, personas, samples, voice_profile
 from .db import init_db
 
 BASE_DIR = Path(__file__).resolve().parent
+ROOT = BASE_DIR.parent
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
+
+
+def _purge_persona_files(persona_id: int) -> None:
+    """Wipe on-disk artifacts (samples + profile) for a persona."""
+    for platform_dir in (ROOT / "samples").glob("*"):
+        target = platform_dir / str(persona_id)
+        if target.exists():
+            shutil.rmtree(target)
+    profile = ROOT / "profiles" / f"{persona_id}.md"
+    profile.unlink(missing_ok=True)
+
+
+def _purge_source_files(persona_id: int, platform: str) -> None:
+    target = ROOT / "samples" / platform / str(persona_id)
+    if target.exists():
+        shutil.rmtree(target)
 
 
 @asynccontextmanager
@@ -68,6 +86,25 @@ async def show_persona(
             "profile_md": voice_profile.read_existing(persona_id),
         },
     )
+
+
+@app.post("/personas/{persona_id}/delete")
+async def delete_persona(persona_id: int) -> RedirectResponse:
+    if personas.get(persona_id) is None:
+        raise HTTPException(status_code=404, detail="persona not found")
+    personas.delete(persona_id)
+    _purge_persona_files(persona_id)
+    return RedirectResponse(url="/", status_code=303)
+
+
+@app.post("/personas/{persona_id}/sources/{source_id}/delete")
+async def unbind_source(persona_id: int, source_id: int) -> RedirectResponse:
+    source = personas.get_source(source_id)
+    if source is None or source["persona_id"] != persona_id:
+        raise HTTPException(status_code=404, detail="source not found")
+    personas.delete_source(source_id)
+    _purge_source_files(persona_id, source["platform"])
+    return RedirectResponse(url=f"/personas/{persona_id}", status_code=303)
 
 
 @app.post("/personas/{persona_id}/sources")

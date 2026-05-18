@@ -31,12 +31,21 @@
         <td>{{ s.identifier }}</td>
         <td>{{ s.last_synced_at or "—" }}</td>
         <td>{{ s.last_synced_count if s.last_synced_count is not none else "—" }}</td>
-        <td>
+        <td style="white-space: nowrap;">
           <form method="post"
                 action="/personas/{{ persona.id }}/sources/{{ s.id }}/sync"
-                style="margin: 0;">
+                style="margin: 0; display: inline-block;">
             <button type="submit" style="padding: 0.25rem 0.75rem; font-size: 0.85rem;">
               立即同步
+            </button>
+          </form>
+          <form method="post"
+                action="/personas/{{ persona.id }}/sources/{{ s.id }}/delete"
+                style="margin: 0; display: inline-block;"
+                onsubmit="return confirm('解绑 {{ s.platform }} 源会一并删除已抓取的样本，确定吗？');">
+            <button type="submit"
+                    style="padding: 0.25rem 0.75rem; font-size: 0.85rem; background: #fee2e2; color: #991b1b;">
+              解绑
             </button>
           </form>
         </td>
@@ -81,4 +90,13 @@
     <button type="submit">绑定</button>
   </form>
 {% endif %}
+
+<hr style="margin: 3rem 0 1rem; border: 0; border-top: 1px solid var(--border);">
+<form method="post"
+      action="/personas/{{ persona.id }}/delete"
+      onsubmit="return confirm('删除人格「{{ persona.name }}」会一并清掉所有样本和 voice profile，且不可恢复。确定吗？');">
+  <button type="submit" style="background: #fee2e2; color: #991b1b;">
+    删除人格
+  </button>
+</form>
 {% endblock %}
