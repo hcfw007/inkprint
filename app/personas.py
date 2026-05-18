@@ -45,15 +45,32 @@ def list_sources(persona_id: int) -> list[sqlite3.Row]:
 
 
 def add_source(persona_id: int, platform: str, identifier: str) -> dict[str, Any]:
+    platform = platform.strip()
+    identifier = identifier.strip()
     with connect() as conn:
+        existing = conn.execute(
+            "SELECT 1 FROM source_bindings WHERE persona_id = ? AND platform = ?",
+            (persona_id, platform),
+        ).fetchone()
+        if existing:
+            return {"ok": False, "error": f"persona already has a {platform} source"}
         try:
             conn.execute(
                 "INSERT INTO source_bindings (persona_id, platform, identifier) VALUES (?, ?, ?)",
-                (persona_id, platform.strip(), identifier.strip()),
+                (persona_id, platform, identifier),
             )
             return {"ok": True}
         except sqlite3.IntegrityError as e:
             return {"ok": False, "error": str(e)}
+
+
+def bound_platforms(persona_id: int) -> set[str]:
+    with connect() as conn:
+        rows = conn.execute(
+            "SELECT platform FROM source_bindings WHERE persona_id = ?",
+            (persona_id,),
+        ).fetchall()
+    return {row["platform"] for row in rows}
 
 
 def get_source(source_id: int) -> sqlite3.Row | None:

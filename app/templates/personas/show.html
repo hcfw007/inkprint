@@ -61,19 +61,24 @@
   </form>
 {% endif %}
 
-<h2>绑定新源</h2>
-<form method="post" action="/personas/{{ persona.id }}/sources">
-  <label for="platform">平台</label>
-  <select id="platform" name="platform" required>
-    <option value="zhihu">知乎</option>
-    <option value="x" disabled>X（待支持）</option>
-    <option value="github" disabled>GitHub（待支持）</option>
-  </select>
+{% set available_platforms = ["zhihu"] | reject("in", bound_platforms) | list %}
+{% if available_platforms %}
+  <h2>绑定新源</h2>
+  <form method="post" action="/personas/{{ persona.id }}/sources">
+    <label for="platform">平台</label>
+    <select id="platform" name="platform" required>
+      {% if "zhihu" in available_platforms %}
+        <option value="zhihu">知乎</option>
+      {% endif %}
+      <option value="x" disabled>X（待支持）</option>
+      <option value="github" disabled>GitHub（待支持）</option>
+    </select>
 
-  <label for="identifier">用户标识</label>
-  <input type="text" id="identifier" name="identifier"
-         placeholder="例如：知乎用户 URL token" required>
+    <label for="identifier">用户标识</label>
+    <input type="text" id="identifier" name="identifier"
+           placeholder="例如：https://www.zhihu.com/people/xxx" required>
 
-  <button type="submit">绑定</button>
-</form>
+    <button type="submit">绑定</button>
+  </form>
+{% endif %}
 {% endblock %}

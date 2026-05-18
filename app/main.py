@@ -62,6 +62,7 @@ async def show_persona(
         {
             "persona": persona,
             "sources": personas.list_sources(persona_id),
+            "bound_platforms": personas.bound_platforms(persona_id),
             "synced_count": synced,
             "profile_generated": profile == "ok",
             "profile_md": voice_profile.read_existing(persona_id),
