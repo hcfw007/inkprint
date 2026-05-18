@@ -4,6 +4,9 @@
 {% if synced_count is not none %}
   <div class="flash">同步完成 · 抓取 {{ synced_count }} 条内容</div>
 {% endif %}
+{% if profile_generated %}
+  <div class="flash">Voice profile 已生成</div>
+{% endif %}
 
 <h2>{{ persona.name }}</h2>
 {% if persona.description %}<p>{{ persona.description }}</p>{% endif %}
@@ -40,6 +43,19 @@
   </table>
 {% else %}
   <div class="empty">还没有绑定任何社媒源。</div>
+{% endif %}
+
+<h2>Voice Profile</h2>
+{% if profile_md %}
+  <pre class="profile">{{ profile_md }}</pre>
+  <form method="post" action="/personas/{{ persona.id }}/profile" style="margin-top: 0.5rem;">
+    <button type="submit">重新生成</button>
+  </form>
+{% else %}
+  <div class="empty">尚未生成。需要至少完成一次社媒同步。</div>
+  <form method="post" action="/personas/{{ persona.id }}/profile">
+    <button type="submit">生成 voice profile</button>
+  </form>
 {% endif %}
 
 <h2>绑定新源</h2>

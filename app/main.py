@@ -5,7 +5,7 @@ from fastapi import FastAPI, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
-from . import crawler_zhihu, personas
+from . import crawler_zhihu, personas, voice_profile
 from .db import init_db
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -51,6 +51,7 @@ async def show_persona(
     request: Request,
     persona_id: int,
     synced: int | None = None,
+    profile: str | None = None,
 ) -> HTMLResponse:
     persona = personas.get(persona_id)
     if persona is None:
@@ -62,6 +63,8 @@ async def show_persona(
             "persona": persona,
             "sources": personas.list_sources(persona_id),
             "synced_count": synced,
+            "profile_generated": profile == "ok",
+            "profile_md": voice_profile.read_existing(persona_id),
         },
     )
 
@@ -78,6 +81,17 @@ async def add_source(
     if not result["ok"]:
         raise HTTPException(status_code=400, detail=result["error"])
     return RedirectResponse(url=f"/personas/{persona_id}", status_code=303)
+
+
+@app.post("/personas/{persona_id}/profile")
+async def generate_profile(persona_id: int) -> RedirectResponse:
+    if personas.get(persona_id) is None:
+        raise HTTPException(status_code=404, detail="persona not found")
+    try:
+        voice_profile.generate(persona_id)
+    except voice_profile.ProfileError as e:
+        raise HTTPException(status_code=502, detail=str(e)) from e
+    return RedirectResponse(url=f"/personas/{persona_id}?profile=ok", status_code=303)
 
 
 @app.post("/personas/{persona_id}/sources/{source_id}/sync")
