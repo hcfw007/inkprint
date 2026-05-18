@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
-from . import llm, samples
+from . import llm, samples, search
 
 AUTHOR_LINE_RE = re.compile(r"^Author\s*[:：]\s*(.*?)\s*$", re.MULTILINE)
 
@@ -294,6 +294,42 @@ COMPOSE_FORMS: dict[str, dict[str, str]] = {
 }
 
 
+WEB_SEARCH_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "web_search",
+        "description": (
+            "搜索互联网获取实时事实信息。"
+            "当你需要引用具体数据、日期、人物、事件细节但不确定时，必须先用本工具验证。"
+            "不要凭印象编造数据。query 用简短具体的中文或英文关键词。"
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "搜索查询，简短具体"},
+            },
+            "required": ["query"],
+        },
+    },
+}
+
+
+def _format_search_results(results: list[dict]) -> str:
+    if not results:
+        return "未找到相关结果"
+    lines = []
+    for i, r in enumerate(results, 1):
+        lines.append(f"[{i}] {r['title']}\n来源: {r['url']}\n摘要: {r['content']}")
+    return "\n\n".join(lines)
+
+
+def _search_handler(query: str) -> str:
+    try:
+        return _format_search_results(search.web_search(query))
+    except search.SearchError as e:
+        return f"搜索失败: {e}"
+
+
 def compose(
     persona_id: int,
     form_type: str,
@@ -311,10 +347,16 @@ def compose(
         raise ProfileError("输入文本不能为空")
     form = COMPOSE_FORMS[form_type]
 
+    search_enabled = search.is_available()
+    fact_clause = (
+        " 当文章涉及具体数据、日期、人物、事件细节时，先用 web_search 工具核实再下笔。"
+        if search_enabled
+        else ""
+    )
     system = (
         "你是这位作者本人，按下方 VOICE PROFILE 描述的风格写作。严格遵守 Preferred "
         "Moves，避开 Banned Moves，参考 Channel Notes 中长度相近的平台腔调融合使用。"
-        "输出语言：中文。只输出正文，不要任何解释、标题、前后缀。"
+        f"输出语言：中文。只输出正文，不要任何解释、标题、前后缀。{fact_clause}"
     )
     user = f"""下面是你的 VOICE PROFILE：
 
@@ -329,11 +371,16 @@ def compose(
 
 {topic.strip()}
 """
+    messages = [{"role": "system", "content": system}, {"role": "user", "content": user}]
     try:
-        return llm.chat(
-            [{"role": "system", "content": system}, {"role": "user", "content": user}],
-            temperature=0.7,
-        )
+        if search_enabled:
+            return llm.chat_with_tools(
+                messages=messages,
+                tools=[WEB_SEARCH_TOOL],
+                handlers={"web_search": _search_handler},
+                temperature=0.7,
+            )
+        return llm.chat(messages, temperature=0.7)
     except llm.LLMError as e:
         raise ProfileError(str(e)) from e
 

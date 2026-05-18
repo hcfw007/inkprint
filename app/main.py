@@ -6,7 +6,7 @@ from fastapi import FastAPI, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
-from . import browser_auth, crawler_weibo, crawler_zhihu, personas, samples, voice_profile
+from . import browser_auth, crawler_weibo, crawler_zhihu, personas, samples, search, voice_profile
 from .db import init_db
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -203,6 +203,7 @@ async def compose_form(request: Request, persona_id: int) -> HTMLResponse:
             "persona": persona,
             "topic": "",
             "form_type": voice_profile.FORM_LONG,
+            "search_enabled": search.is_available(),
             "result": None,
             "error": None,
         },
@@ -237,6 +238,7 @@ async def compose_submit(
             "persona": persona,
             "topic": topic,
             "form_type": form_type,
+            "search_enabled": search.is_available(),
             "result": result,
             "error": error,
         },
