@@ -64,6 +64,12 @@ class ProfileVersion:
     path: Path
 
 
+@dataclass(frozen=True)
+class ComposeResult:
+    content: str
+    trace: list[llm.TraceStep]
+
+
 def _load_samples(persona_id: int) -> list[dict]:
     """Pull the merged sample union (latest version per content_id)."""
     items = samples.load_merged(persona_id)
@@ -283,7 +289,7 @@ FORM_SHORT = "short"
 COMPOSE_FORMS: dict[str, dict[str, str]] = {
     FORM_LONG: {
         "label": "长文",
-        "length": "2000 到 4000 字之间，可以分段、用小标题",
+        "length": "600 到 2000 字之间，可以分段、用小标题，不要硬撑",
         "scenario": (
             "你正在为自己的个人公众号 / 博客 / 长文专栏写一篇**原创随笔或观察评论**。"
             "不是在回答任何人提的问题——是你主动想聊这件事，所以才坐下来写。"
@@ -343,8 +349,14 @@ def compose(
     form_type: str,
     topic: str,
     author_text: str = "",
-) -> str:
-    """Generate a post in the persona's voice for the given length type."""
+    q_and_a: bool = False,
+) -> ComposeResult:
+    """Generate a post in the persona's voice for the given length type.
+
+    q_and_a flips the default 'you are originating content' framing into
+    'you are answering a question someone asked' — useful when the topic
+    really is a Q the user wants the persona to answer in their voice.
+    """
     if form_type not in COMPOSE_FORMS:
         raise ProfileError(f"未知文本类型: {form_type}")
     profile_md = read_existing(persona_id)
@@ -369,14 +381,27 @@ def compose(
             "**禁止凭记忆答题**。哪怕你 90% 确定，也搜一下确认再写。"
             "如果搜索结果跟你记忆冲突，以搜索为准。"
         )
+
+    if q_and_a:
+        stance = (
+            "本次是**回答一个具体提问**。可以正常使用 Preferred Moves 中的答题动作（"
+            "『先抛结论再展开』、『利益相关』、『—— 为什么…』等），按知乎答题模式来。"
+        )
+        scenario = "你正在知乎或论坛回答一个具体问题，下面给你看问题本身。"
+    else:
+        stance = (
+            "本次是**原创发起内容**，不是回答任何人的提问。Preferred Moves 里的『答题动作』"
+            "（『先抛结论再展开』、『利益相关』、『—— 为什么…』）**不要套用**——它们的语气、"
+            "节奏、词汇偏好可以借鉴，但结构上不要装成在答题。\n"
+            "禁止以下开场：『我认为...』、『先说结论...』、『说实话...』、『其实...』、"
+            "『利益相关...』、『不请自来...』、任何反问『为什么...』作为首句。\n"
+            "开场应该是观察、事件、画面或具体场景，不是表态。"
+        )
+        scenario = form["scenario"]
+
     system = (
-        "你是这位作者本人，按下方 VOICE PROFILE 描述的写作风格输出**原创内容**。\n"
-        "重要：VOICE PROFILE 是基于该作者的知乎回答样本提炼的，所以 Preferred Moves "
-        "里很多是『答题动作』（如『先抛结论再展开』、『利益相关』开场）。**你不是在答题**——"
-        "这些动作的『语气、节奏、词汇偏好』可以借鉴，但不要套用『回答问题』的结构。\n"
-        "禁止以下开场：『我认为...』、『先说结论...』、『说实话...』、『其实...』、"
-        "『利益相关...』、『不请自来...』、任何反问『为什么...』作为首句。\n"
-        "开场应该是观察、事件、画面或具体场景，不是表态。"
+        "你是这位作者本人，按下方 VOICE PROFILE 描述的写作风格输出内容。\n"
+        f"{stance}\n"
         "严格避开 Banned Moves。输出语言：中文。只输出正文，不要任何解释、标题、前后缀。"
         f"{fact_clause}"
     )
@@ -387,28 +412,34 @@ def compose(
 ---
 
 【写作场景】
-{form["scenario"]}
+{scenario}
 
 【字数】{form["length"]}
 【配图】{form["images"]}
 
-【素材 / 想法 / 草稿】
+【{"问题" if q_and_a else "素材 / 想法 / 草稿"}】
 {topic.strip()}
-
-请基于上面的素材，作为该作者**主动发起**的内容写出来。
 """
     messages = [{"role": "system", "content": system}, {"role": "user", "content": user}]
     try:
         if search_enabled:
-            return llm.chat_with_tools(
+            content, trace = llm.chat_with_tools(
                 messages=messages,
                 tools=[WEB_SEARCH_TOOL],
                 handlers={"web_search": _search_handler},
                 temperature=0.7,
+                trace_tag=f"compose:p{persona_id}:{form_type}",
             )
-        return llm.chat(messages, temperature=0.7)
+        else:
+            content = llm.chat(messages, temperature=0.7)
+            prompt_chars = sum(len(m["content"]) for m in messages)
+            trace = [
+                llm.TraceStep("request", f"system + user 共 {prompt_chars} 字（无搜索）", ""),
+                llm.TraceStep("final", f"最终正文 {len(content)} 字", ""),
+            ]
     except llm.LLMError as e:
         raise ProfileError(str(e)) from e
+    return ComposeResult(content=content, trace=trace)
 
 
 def read_existing(persona_id: int) -> str | None:

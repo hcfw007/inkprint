@@ -40,6 +40,13 @@ class LLMConfig:
     model: str
 
 
+@dataclass(frozen=True)
+class TraceStep:
+    kind: str  # "request" | "tool_call" | "tool_result" | "final"
+    label: str  # short summary, safe to print
+    detail: str = ""  # longer detail, render in <details> on the UI
+
+
 def load_config() -> LLMConfig:
     base_url = os.getenv("LLM_BASE_URL", "").strip()
     api_key = os.getenv("LLM_API_KEY", "").strip()
@@ -83,7 +90,8 @@ def chat_with_tools(
     handlers: dict[str, Callable[..., str]],
     temperature: float = 0.3,
     max_iterations: int = 6,
-) -> str:
+    trace_tag: str = "llm",
+) -> tuple[str, list[TraceStep]]:
     """Run a chat-completion loop that lets the model invoke tools.
 
     The model alternates between requesting tool calls and producing final
@@ -91,6 +99,9 @@ def chat_with_tools(
     append the result back as a ``role: "tool"`` message. The loop exits as
     soon as the model returns plain content (no tool_calls), or after
     ``max_iterations`` round-trips to keep runaway loops bounded.
+
+    Returns (content, trace). Trace also gets a one-line summary printed to
+    stdout so the dev sees what the model did without unfolding any UI.
     """
     cfg = load_config()
     client = OpenAI(
@@ -99,6 +110,10 @@ def chat_with_tools(
         http_client=_build_http_client(),
     )
     history = list(messages)
+    trace: list[TraceStep] = []
+    prompt_chars = sum(len(str(m.get("content") or "")) for m in history)
+    trace.append(TraceStep("request", f"system + user 共 {prompt_chars} 字 → {cfg.model}", ""))
+    print(f"[{trace_tag}] → request to {cfg.model}, prompt {prompt_chars} chars", flush=True)
     for _ in range(max_iterations):
         response = client.chat.completions.create(
             model=cfg.model,
@@ -115,6 +130,9 @@ def chat_with_tools(
                     args = json.loads(call.function.arguments or "{}")
                 except json.JSONDecodeError:
                     args = {}
+                arg_repr = ", ".join(f"{k}={v!r}" for k, v in args.items())
+                trace.append(TraceStep("tool_call", f"{name}({arg_repr})", ""))
+                print(f"[{trace_tag}] → tool_call: {name}({arg_repr})", flush=True)
                 if name in handlers:
                     try:
                         result = handlers[name](**args)
@@ -122,9 +140,20 @@ def chat_with_tools(
                         result = f"tool error: {e}"
                 else:
                     result = f"unknown tool: {name}"
-                history.append({"role": "tool", "tool_call_id": call.id, "content": str(result)})
+                result_str = str(result)
+                preview = result_str[:120].replace("\n", " ")
+                trace.append(
+                    TraceStep("tool_result", f"返回 {len(result_str)} 字 · {preview}", result_str)
+                )
+                print(
+                    f"[{trace_tag}] ← tool_result: {len(result_str)} chars · {preview}",
+                    flush=True,
+                )
+                history.append({"role": "tool", "tool_call_id": call.id, "content": result_str})
             continue
         if msg.content:
-            return msg.content
+            trace.append(TraceStep("final", f"最终正文 {len(msg.content)} 字", ""))
+            print(f"[{trace_tag}] ← final content: {len(msg.content)} chars", flush=True)
+            return msg.content, trace
         raise LLMError("model returned neither content nor tool_calls")
     raise LLMError(f"tool-call loop exceeded {max_iterations} iterations without final content")

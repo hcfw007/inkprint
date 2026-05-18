@@ -11,7 +11,6 @@
     🔎 联网搜索已启用：涉及具体数据 / 日期 / 人物 / 事件时，模型会自动调用 web_search 核实。
   {% else %}
     🔌 未配置 TAVILY_API_KEY：模型只能凭训练数据写作，事实可能过时。
-    要启用联网搜索，按 <code>.env.example</code> 配置 <code>TAVILY_API_KEY</code>。
   {% endif %}
 </p>
 
@@ -25,14 +24,23 @@
   <label for="form_type">文本类型</label>
   <select id="form_type" name="form_type" required>
     <option value="long" {% if form_type == "long" %}selected{% endif %}>
-      长文（2000–4000 字，允许配图占位）
+      长文（600–2000 字，允许配图占位）
     </option>
     <option value="short" {% if form_type == "short" %}selected{% endif %}>
       短文（≤ 140 字，不配图）
     </option>
   </select>
 
-  <label for="topic">思路 / 素材 / 草稿</label>
+  <label style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.75rem; cursor: pointer;">
+    <input type="checkbox" name="q_and_a" value="1" {% if q_and_a %}checked{% endif %}
+           style="width: auto; margin: 0;">
+    <span>这是回答问题（套用答题结构：先抛结论 / 利益相关 / 反问）</span>
+  </label>
+  <p class="muted" style="font-size: 0.8rem; margin-top: 0.25rem;">
+    默认不勾选——产出是「自己主动发起的内容」。勾上后下方输入框被当作问题，模型按知乎答题模式写。
+  </p>
+
+  <label for="topic">{% if q_and_a %}问题{% else %}思路 / 素材 / 草稿{% endif %}</label>
   <textarea id="topic" name="topic" rows="6"
             placeholder="想写啥，先这里塞一段，可以是要点、可以是别人原文、可以是一句吐槽..."
             required>{{ topic }}</textarea>
@@ -43,5 +51,32 @@
 {% if result %}
   <h2 style="margin-top: 2.5rem;">生成结果</h2>
   <article class="sample-body">{{ result }}</article>
+{% endif %}
+
+{% if trace %}
+  <details style="margin-top: 1rem;">
+    <summary class="muted" style="cursor: pointer; font-size: 0.9rem;">
+      执行轨迹（{{ trace|length }} 步）
+    </summary>
+    <ul style="font-size: 0.85rem; line-height: 1.7; margin-top: 0.5rem;">
+      {% for step in trace %}
+        <li>
+          <strong style="color:
+            {%- if step.kind == 'request' %} #2563eb
+            {%- elif step.kind == 'tool_call' %} #c2410c
+            {%- elif step.kind == 'tool_result' %} #15803d
+            {%- else %} #4b5563{% endif -%}
+          ;">{{ step.kind }}</strong>
+          <span>{{ step.label }}</span>
+          {% if step.detail %}
+            <details style="display: inline-block;">
+              <summary class="muted" style="cursor: pointer; display: inline;">展开</summary>
+              <pre style="font-size: 0.8rem; background: #f8fafc; padding: 0.5rem; border-radius: 4px; white-space: pre-wrap;">{{ step.detail }}</pre>
+            </details>
+          {% endif %}
+        </li>
+      {% endfor %}
+    </ul>
+  </details>
 {% endif %}
 {% endblock %}

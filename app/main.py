@@ -203,8 +203,10 @@ async def compose_form(request: Request, persona_id: int) -> HTMLResponse:
             "persona": persona,
             "topic": "",
             "form_type": voice_profile.FORM_LONG,
+            "q_and_a": False,
             "search_enabled": search.is_available(),
             "result": None,
+            "trace": None,
             "error": None,
         },
     )
@@ -216,11 +218,13 @@ async def compose_submit(
     persona_id: int,
     topic: str = Form(""),
     form_type: str = Form(...),
+    q_and_a: str = Form(""),
 ) -> HTMLResponse:
     persona = personas.get(persona_id)
     if persona is None:
         raise HTTPException(status_code=404, detail="persona not found")
-    result: str | None = None
+    is_qa = bool(q_and_a)
+    result: voice_profile.ComposeResult | None = None
     error: str | None = None
     try:
         result = voice_profile.compose(
@@ -228,6 +232,7 @@ async def compose_submit(
             form_type=form_type,
             topic=topic,
             author_text=persona["author_text"] or "",
+            q_and_a=is_qa,
         )
     except voice_profile.ProfileError as e:
         error = str(e)
@@ -238,8 +243,10 @@ async def compose_submit(
             "persona": persona,
             "topic": topic,
             "form_type": form_type,
+            "q_and_a": is_qa,
             "search_enabled": search.is_available(),
-            "result": result,
+            "result": result.content if result else None,
+            "trace": result.trace if result else None,
             "error": error,
         },
     )
