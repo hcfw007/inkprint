@@ -70,41 +70,80 @@ def _load_samples(persona_id: int) -> list[dict]:
 
 
 def _pick_representative(samples: list[dict]) -> list[dict]:
-    """Pick up to SAMPLE_PICK_LIMIT items biased toward longer, more substantive posts.
+    """Pick up to SAMPLE_PICK_LIMIT items, biased toward substantive posts but
+    balanced across platforms so a chatty long-form source does not starve
+    out a terser short-form one.
 
-    Strategy: filter out very short ones, then take the longest by content_text.
-    Longer posts tend to carry more voice signal than one-liners.
+    Strategy: bucket by platform, sort each bucket by length desc, then
+    interleave round-robin until the global limit is hit.
     """
     eligible = [
         s
         for s in samples
         if isinstance(s.get("content_text"), str) and len(s["content_text"]) >= SAMPLE_MIN_CHARS
     ]
-    eligible.sort(key=lambda s: len(s["content_text"]), reverse=True)
-    return eligible[:SAMPLE_PICK_LIMIT]
+    buckets: dict[str, list[dict]] = {}
+    for item in eligible:
+        buckets.setdefault(item.get("platform") or "unknown", []).append(item)
+    for plat in buckets:
+        buckets[plat].sort(key=lambda s: len(s["content_text"]), reverse=True)
+
+    picked: list[dict] = []
+    while len(picked) < SAMPLE_PICK_LIMIT and any(buckets.values()):
+        for plat in list(buckets.keys()):
+            if not buckets[plat]:
+                continue
+            picked.append(buckets[plat].pop(0))
+            if len(picked) >= SAMPLE_PICK_LIMIT:
+                break
+    return picked
+
+
+PLATFORM_LABEL = {"zhihu": "知乎", "weibo": "微博"}
+
+
+def _format_sample(idx: int, item: dict) -> str:
+    platform = item.get("platform") or "unknown"
+    label = PLATFORM_LABEL.get(platform, platform)
+    text = item["content_text"]
+    question = item.get("question_title") or item.get("title") or ""
+    if platform == "zhihu" and question:
+        return f"[样本 {idx} · {label}] 问题：{question}\n回答：{text}"
+    return f"[样本 {idx} · {label}] {text}"
+
+
+def _platform_breakdown(samples_used: list[dict], total_count: int) -> str:
+    by_platform: dict[str, int] = {}
+    for s in samples_used:
+        by_platform[s.get("platform") or "unknown"] = (
+            by_platform.get(s.get("platform") or "unknown", 0) + 1
+        )
+    parts = [f"{PLATFORM_LABEL.get(p, p)} {c} 条" for p, c in sorted(by_platform.items())]
+    return (
+        f"已选取最具代表性的 {len(samples_used)} 条（{' + '.join(parts)}），"
+        f"来自共 {total_count} 条样本"
+    )
 
 
 def _build_prompt(samples_used: list[dict], total_count: int) -> list[dict[str, str]]:
-    formatted = []
-    for i, s in enumerate(samples_used, 1):
-        question = s.get("question_title") or s.get("title") or ""
-        text = s["content_text"]
-        formatted.append(f"[样本 {i}] 问题：{question}\n回答：{text}")
+    formatted = [_format_sample(i, s) for i, s in enumerate(samples_used, 1)]
     samples_block = "\n\n---\n\n".join(formatted)
+    breakdown = _platform_breakdown(samples_used, total_count)
 
     system = (
         "You are a voice profile analyst following the brand-voice methodology. "
-        "Given real social-media samples from one author, produce a structured, "
-        "operational VOICE PROFILE that downstream LLMs can read directly to "
-        "imitate the author's voice. Be concrete and source-backed — every "
-        "claim should be observable in the samples. If samples conflict, call "
-        "out the split instead of averaging it into mush. The samples are in "
-        "Chinese; the profile MUST also be in Chinese."
+        "Given real social-media samples from one author across multiple platforms, "
+        "produce a structured, operational VOICE PROFILE that downstream LLMs can "
+        "read directly to imitate the author's voice. Be concrete and source-backed "
+        "— every claim should be observable in the samples. If the author writes "
+        "differently across platforms, call that split out in Channel Notes rather "
+        "than averaging it into mush. The samples are in Chinese; the profile MUST "
+        "also be in Chinese."
     )
 
-    user = f"""请基于以下来自同一作者的知乎回答样本，输出 VOICE PROFILE。
+    user = f"""请基于以下来自同一作者的多平台社媒样本，输出 VOICE PROFILE。
 
-样本总数：{total_count}（已选取最具代表性的 {len(samples_used)} 条）。
+{breakdown}。
 
 样本：
 
@@ -115,12 +154,12 @@ def _build_prompt(samples_used: list[dict], total_count: int) -> list[dict[str, 
 ```
 VOICE PROFILE
 =============
-Author:
-Goal:
+Author:  <对作者的一段简短画像：身份、年龄段、领域、性格、立场倾向等>
+Goal:    <作者发文的核心目的：分享、辩论、记录、社交等>
 Confidence:  <low | medium | high，结合样本量和一致性判断>
 
 Source Set
-- 知乎回答 {len(samples_used)} 条（共 {total_count} 条）
+- <按平台分别列出实际使用的样本数>
 
 Rhythm
 - <句长、节奏、断句习惯>
@@ -150,8 +189,8 @@ CTA Rules
 - <收尾习惯：留问题、给结论、轻调侃、无 CTA>
 
 Channel Notes
-- 知乎：<在这个平台的具体腔调>
-- 其他平台：<待补>
+- 知乎：<在这个平台的具体腔调，跟下面对比要有差异>
+- 微博：<在这个平台的具体腔调，跟上面对比要有差异>
 ```
 
 不要写文学评论式的描述，每条都要简短可操作，能让另一个 AI 拿来直接复用。"""
