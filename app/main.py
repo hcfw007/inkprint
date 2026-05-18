@@ -68,7 +68,10 @@ async def create_persona(
 async def show_persona(
     request: Request,
     persona_id: int,
-    synced: int | None = None,
+    added: int | None = None,
+    updated: int | None = None,
+    unchanged: int | None = None,
+    total: int | None = None,
     profile: str | None = None,
 ) -> HTMLResponse:
     persona = personas.get(persona_id)
@@ -81,7 +84,11 @@ async def show_persona(
             "persona": persona,
             "sources": personas.list_sources(persona_id),
             "bound_platforms": personas.bound_platforms(persona_id),
-            "synced_count": synced,
+            "sync_delta": (
+                {"added": added, "updated": updated, "unchanged": unchanged, "total": total}
+                if added is not None
+                else None
+            ),
             "profile_generated": profile == "ok",
             "profile_md": voice_profile.read_existing(persona_id),
         },
@@ -170,8 +177,14 @@ async def sync_source(persona_id: int, source_id: int) -> RedirectResponse:
         result = crawler_zhihu.sync(persona_id, source["identifier"])
     except crawler_zhihu.CrawlerError as e:
         raise HTTPException(status_code=502, detail=str(e)) from e
-    personas.mark_source_synced(source_id, result.item_count, str(result.sample_path))
+    personas.mark_source_synced(source_id, result.total_count, str(result.sample_path))
     return RedirectResponse(
-        url=f"/personas/{persona_id}?synced={result.item_count}",
+        url=(
+            f"/personas/{persona_id}"
+            f"?added={result.added_count}"
+            f"&updated={result.updated_count}"
+            f"&unchanged={result.unchanged_count}"
+            f"&total={result.total_count}"
+        ),
         status_code=303,
     )

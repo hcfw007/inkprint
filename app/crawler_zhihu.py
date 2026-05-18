@@ -14,6 +14,8 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
+from . import samples
+
 ROOT = Path(__file__).resolve().parent.parent
 CRAWLER_DIR = ROOT / "crawlers" / "zhihu"
 CONFIG_FILE = CRAWLER_DIR / "config" / "zhihu_config.py"
@@ -44,7 +46,11 @@ class CrawlerError(RuntimeError):
 @dataclass(frozen=True)
 class CrawlResult:
     sample_path: Path
-    item_count: int
+    item_count: int  # items in this raw dump
+    total_count: int  # union size after merging with history
+    added_count: int
+    updated_count: int
+    unchanged_count: int
 
 
 def _rewrite_config(zhihu_url: str) -> None:
@@ -80,13 +86,43 @@ def _harvest(persona_id: int, output_file: Path) -> CrawlResult:
     SAMPLES_DIR.mkdir(parents=True, exist_ok=True)
     persona_dir = SAMPLES_DIR / str(persona_id)
     persona_dir.mkdir(exist_ok=True)
+
+    # Snapshot the prior union BEFORE copying the new dump in.
+    prior = {
+        item["content_id"]: item
+        for item in samples.load_merged(persona_id)
+        if isinstance(item.get("content_id"), str)
+    }
+
     timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     target = persona_dir / f"{timestamp}.json"
     shutil.copy2(output_file, target)
+
     with target.open(encoding="utf-8") as f:
-        data = json.load(f)
-    count = len(data) if isinstance(data, list) else 0
-    return CrawlResult(sample_path=target, item_count=count)
+        dump = json.load(f)
+    dump = dump if isinstance(dump, list) else []
+
+    added = updated = unchanged = 0
+    for item in dump:
+        cid = item.get("content_id")
+        if not isinstance(cid, str):
+            continue
+        old = prior.get(cid)
+        if old is None:
+            added += 1
+        elif samples.updated_ts(item) > samples.updated_ts(old):
+            updated += 1
+        else:
+            unchanged += 1
+
+    return CrawlResult(
+        sample_path=target,
+        item_count=len(dump),
+        total_count=len(samples.load_merged(persona_id)),
+        added_count=added,
+        updated_count=updated,
+        unchanged_count=unchanged,
+    )
 
 
 def sync(persona_id: int, zhihu_url: str) -> CrawlResult:

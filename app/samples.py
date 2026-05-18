@@ -24,21 +24,46 @@ class SampleSummary:
     voteup_count: int
 
 
-def _latest_file(persona_id: int) -> Path | None:
+def _all_files(persona_id: int) -> list[Path]:
     persona_dir = SAMPLES_DIR / str(persona_id)
     if not persona_dir.exists():
-        return None
-    candidates = sorted(persona_dir.glob("*.json"))
-    return candidates[-1] if candidates else None
-
-
-def _load(persona_id: int) -> list[dict]:
-    path = _latest_file(persona_id)
-    if path is None:
         return []
+    return sorted(persona_dir.glob("*.json"))
+
+
+def _read_dump(path: Path) -> list[dict]:
     with path.open(encoding="utf-8") as f:
         data = json.load(f)
     return data if isinstance(data, list) else []
+
+
+def updated_ts(item: dict) -> int:
+    """Best-effort 'last edited' timestamp; falls back to created_time / 0."""
+    return int(item.get("updated_time") or item.get("created_time") or 0)
+
+
+def load_merged(persona_id: int) -> list[dict]:
+    """Union of every sample dump for this persona, deduped by content_id.
+
+    When the same content_id appears across multiple dumps we keep the
+    copy with the newest updated_time. This way 'sync' is naturally
+    incremental at the data layer even though the crawler itself does
+    a full pass each time.
+    """
+    merged: dict[str, dict] = {}
+    for path in _all_files(persona_id):
+        for item in _read_dump(path):
+            cid = item.get("content_id")
+            if not isinstance(cid, str):
+                continue
+            existing = merged.get(cid)
+            if existing is None or updated_ts(item) >= updated_ts(existing):
+                merged[cid] = item
+    return list(merged.values())
+
+
+def _load(persona_id: int) -> list[dict]:
+    return load_merged(persona_id)
 
 
 def _summarize(idx: int, item: dict) -> SampleSummary:

@@ -1,8 +1,11 @@
 {% extends "layout.html" %}
 {% block title %}{{ persona.name }} · inkprint{% endblock %}
 {% block content %}
-{% if synced_count is not none %}
-  <div class="flash">同步完成 · 抓取 {{ synced_count }} 条内容</div>
+{% if sync_delta %}
+  <div class="flash">
+    同步完成 · 新增 {{ sync_delta.added }} · 更新 {{ sync_delta.updated }} ·
+    未变 {{ sync_delta.unchanged }} · 累计 {{ sync_delta.total }} 条
+  </div>
 {% endif %}
 {% if profile_generated %}
   <div class="flash">Voice profile 已生成</div>

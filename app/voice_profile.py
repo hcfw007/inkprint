@@ -8,14 +8,12 @@ Pipeline:
   5. Write the profile to profiles/{persona_id}.md.
 """
 
-import json
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import llm
+from . import llm, samples
 
 ROOT = Path(__file__).resolve().parent.parent
-SAMPLES_DIR = ROOT / "samples" / "zhihu"
 PROFILES_DIR = ROOT / "profiles"
 
 SAMPLE_PICK_LIMIT = 30
@@ -33,23 +31,12 @@ class ProfileResult:
     sample_count_used: int
 
 
-def _latest_sample_file(persona_id: int) -> Path:
-    persona_dir = SAMPLES_DIR / str(persona_id)
-    if not persona_dir.exists():
-        raise ProfileError(f"no samples for persona {persona_id}; sync zhihu first")
-    candidates = sorted(persona_dir.glob("*.json"))
-    if not candidates:
-        raise ProfileError(f"no sample json under {persona_dir}")
-    return candidates[-1]
-
-
 def _load_samples(persona_id: int) -> list[dict]:
-    path = _latest_sample_file(persona_id)
-    with path.open(encoding="utf-8") as f:
-        data = json.load(f)
-    if not isinstance(data, list):
-        raise ProfileError(f"unexpected sample shape in {path}: not a list")
-    return data
+    """Pull the merged sample union (latest version per content_id)."""
+    items = samples.load_merged(persona_id)
+    if not items:
+        raise ProfileError(f"no samples for persona {persona_id}; sync first")
+    return items
 
 
 def _pick_representative(samples: list[dict]) -> list[dict]:
