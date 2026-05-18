@@ -72,20 +72,6 @@
   <div class="empty">还没有绑定任何社媒源。</div>
 {% endif %}
 
-<h2>Voice Profile</h2>
-{% if profile_md %}
-  <pre class="profile">{{ profile_md }}</pre>
-  <form method="post" action="/personas/{{ persona.id }}/profile" style="margin-top: 0.5rem; display: inline-block;">
-    <button type="submit">重新生成</button>
-  </form>
-  <a href="/personas/{{ persona.id }}/profile/versions" style="margin-left: 0.75rem;">查看历史版本 →</a>
-{% else %}
-  <div class="empty">尚未生成。需要至少完成一次社媒同步。</div>
-  <form method="post" action="/personas/{{ persona.id }}/profile">
-    <button type="submit">生成 voice profile</button>
-  </form>
-{% endif %}
-
 {% set available_platforms = ["zhihu", "weibo"] | reject("in", bound_platforms) | list %}
 {% if available_platforms %}
   <h2>绑定新源</h2>
@@ -107,6 +93,20 @@
            placeholder="知乎填主页 URL，微博填 uid（如 2964086533）" required>
 
     <button type="submit">绑定</button>
+  </form>
+{% endif %}
+
+<h2>Voice Profile</h2>
+{% if profile_md %}
+  <pre class="profile">{{ profile_md }}</pre>
+  <form method="post" action="/personas/{{ persona.id }}/profile" style="margin-top: 0.5rem; display: inline-block;">
+    <button type="submit">重新生成</button>
+  </form>
+  <a href="/personas/{{ persona.id }}/profile/versions" style="margin-left: 0.75rem;">查看历史版本 →</a>
+{% else %}
+  <div class="empty">尚未生成。需要至少完成一次社媒同步。</div>
+  <form method="post" action="/personas/{{ persona.id }}/profile">
+    <button type="submit">生成 voice profile</button>
   </form>
 {% endif %}
 
