@@ -15,13 +15,16 @@ templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
 
 def _purge_persona_files(persona_id: int) -> None:
-    """Wipe on-disk artifacts (samples + profile) for a persona."""
+    """Wipe on-disk artifacts (samples + profile versions) for a persona."""
     for platform_dir in (ROOT / "samples").glob("*"):
         target = platform_dir / str(persona_id)
         if target.exists():
             shutil.rmtree(target)
-    profile = ROOT / "profiles" / f"{persona_id}.md"
-    profile.unlink(missing_ok=True)
+    profile_dir = ROOT / "profiles" / str(persona_id)
+    if profile_dir.exists():
+        shutil.rmtree(profile_dir)
+    legacy_profile = ROOT / "profiles" / f"{persona_id}.md"
+    legacy_profile.unlink(missing_ok=True)
 
 
 def _purge_source_files(persona_id: int, platform: str) -> None:
@@ -164,6 +167,38 @@ async def generate_profile(persona_id: int) -> RedirectResponse:
     except voice_profile.ProfileError as e:
         raise HTTPException(status_code=502, detail=str(e)) from e
     return RedirectResponse(url=f"/personas/{persona_id}?profile=ok", status_code=303)
+
+
+@app.get("/personas/{persona_id}/profile/versions", response_class=HTMLResponse)
+async def list_profile_versions(request: Request, persona_id: int) -> HTMLResponse:
+    persona = personas.get(persona_id)
+    if persona is None:
+        raise HTTPException(status_code=404, detail="persona not found")
+    return templates.TemplateResponse(
+        request,
+        "profiles/versions.html",
+        {"persona": persona, "versions": voice_profile.list_versions(persona_id)},
+    )
+
+
+@app.get("/personas/{persona_id}/profile/{name}", response_class=HTMLResponse)
+async def show_profile_version(request: Request, persona_id: int, name: str) -> HTMLResponse:
+    persona = personas.get(persona_id)
+    if persona is None:
+        raise HTTPException(status_code=404, detail="persona not found")
+    content = voice_profile.read_version(persona_id, name)
+    if content is None:
+        raise HTTPException(status_code=404, detail="profile version not found")
+    return templates.TemplateResponse(
+        request,
+        "profiles/show.html",
+        {
+            "persona": persona,
+            "name": name,
+            "created_at": voice_profile.format_ts(name),
+            "content": content,
+        },
+    )
 
 
 @app.post("/personas/{persona_id}/sources/{source_id}/sync")

@@ -1,0 +1,10 @@
+{% extends "layout.html" %}
+{% block title %}{{ persona.name }} profile · {{ created_at }} · inkprint{% endblock %}
+{% block content %}
+<p class="muted">
+  <a href="/personas/{{ persona.id }}/profile/versions">← 返回历史版本列表</a>
+</p>
+<h2>{{ persona.name }} · Voice Profile</h2>
+<p class="muted">{{ created_at }}</p>
+<pre class="profile">{{ content }}</pre>
+{% endblock %}

@@ -63,9 +63,10 @@
 <h2>Voice Profile</h2>
 {% if profile_md %}
   <pre class="profile">{{ profile_md }}</pre>
-  <form method="post" action="/personas/{{ persona.id }}/profile" style="margin-top: 0.5rem;">
+  <form method="post" action="/personas/{{ persona.id }}/profile" style="margin-top: 0.5rem; display: inline-block;">
     <button type="submit">重新生成</button>
   </form>
+  <a href="/personas/{{ persona.id }}/profile/versions" style="margin-left: 0.75rem;">查看历史版本 →</a>
 {% else %}
   <div class="empty">尚未生成。需要至少完成一次社媒同步。</div>
   <form method="post" action="/personas/{{ persona.id }}/profile">

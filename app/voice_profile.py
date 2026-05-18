@@ -9,6 +9,7 @@ Pipeline:
 """
 
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 
 from . import llm, samples
@@ -20,6 +21,28 @@ SAMPLE_PICK_LIMIT = 30
 SAMPLE_MIN_CHARS = 30
 
 
+def _persona_dir(persona_id: int) -> Path:
+    return PROFILES_DIR / str(persona_id)
+
+
+def _migrate_legacy_flat(persona_id: int) -> None:
+    """Move profiles/{id}.md (old layout) into profiles/{id}/v{ts}.md once.
+
+    Idempotent and silent if there is nothing to migrate.
+    """
+    legacy = PROFILES_DIR / f"{persona_id}.md"
+    if not legacy.exists():
+        return
+    persona_dir = _persona_dir(persona_id)
+    persona_dir.mkdir(parents=True, exist_ok=True)
+    legacy_ts = datetime.fromtimestamp(legacy.stat().st_mtime, tz=UTC)
+    target = persona_dir / f"{legacy_ts.strftime('%Y%m%dT%H%M%SZ')}.md"
+    if not target.exists():
+        legacy.rename(target)
+    else:
+        legacy.unlink()
+
+
 class ProfileError(RuntimeError):
     """Anything that goes wrong producing a profile."""
 
@@ -29,6 +52,13 @@ class ProfileResult:
     profile_path: Path
     sample_count_total: int
     sample_count_used: int
+
+
+@dataclass(frozen=True)
+class ProfileVersion:
+    name: str  # filename without extension, e.g. "20260518T123456Z"
+    created_at: str  # human-readable
+    path: Path
 
 
 def _load_samples(persona_id: int) -> list[dict]:
@@ -145,8 +175,10 @@ def generate(persona_id: int) -> ProfileResult:
     except llm.LLMError as e:
         raise ProfileError(str(e)) from e
 
-    PROFILES_DIR.mkdir(parents=True, exist_ok=True)
-    profile_path = PROFILES_DIR / f"{persona_id}.md"
+    persona_dir = _persona_dir(persona_id)
+    persona_dir.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    profile_path = persona_dir / f"{timestamp}.md"
     profile_path.write_text(profile_md, encoding="utf-8")
     return ProfileResult(
         profile_path=profile_path,
@@ -155,6 +187,34 @@ def generate(persona_id: int) -> ProfileResult:
     )
 
 
+def format_ts(stem: str) -> str:
+    """Render a 20260518T123456Z stem as 2026-05-18 12:34:56 UTC, best effort."""
+    try:
+        dt = datetime.strptime(stem, "%Y%m%dT%H%M%SZ").replace(tzinfo=UTC)
+        return dt.strftime("%Y-%m-%d %H:%M:%S UTC")
+    except ValueError:
+        return stem
+
+
+def list_versions(persona_id: int) -> list[ProfileVersion]:
+    _migrate_legacy_flat(persona_id)
+    persona_dir = _persona_dir(persona_id)
+    if not persona_dir.exists():
+        return []
+    versions = []
+    for path in sorted(persona_dir.glob("*.md"), reverse=True):
+        versions.append(ProfileVersion(name=path.stem, created_at=format_ts(path.stem), path=path))
+    return versions
+
+
 def read_existing(persona_id: int) -> str | None:
-    path = PROFILES_DIR / f"{persona_id}.md"
+    versions = list_versions(persona_id)
+    if not versions:
+        return None
+    return versions[0].path.read_text(encoding="utf-8")
+
+
+def read_version(persona_id: int, name: str) -> str | None:
+    _migrate_legacy_flat(persona_id)
+    path = _persona_dir(persona_id) / f"{name}.md"
     return path.read_text(encoding="utf-8") if path.exists() else None

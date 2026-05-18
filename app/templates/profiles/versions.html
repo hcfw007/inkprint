@@ -1,0 +1,21 @@
+{% extends "layout.html" %}
+{% block title %}{{ persona.name }} 的 profile 历史 · inkprint{% endblock %}
+{% block content %}
+<p class="muted"><a href="/personas/{{ persona.id }}">← 返回 {{ persona.name }}</a></p>
+<h2>{{ persona.name }} 的 voice profile 历史</h2>
+
+{% if versions %}
+  <p class="muted">共 {{ versions|length }} 个版本，最新在最上</p>
+  <ul class="cards">
+    {% for v in versions %}
+      <li>
+        <a href="/personas/{{ persona.id }}/profile/{{ v.name }}">
+          {{ v.created_at }}{% if loop.first %} · <strong>当前</strong>{% endif %}
+        </a>
+      </li>
+    {% endfor %}
+  </ul>
+{% else %}
+  <div class="empty">还没有生成过 voice profile。</div>
+{% endif %}
+{% endblock %}
