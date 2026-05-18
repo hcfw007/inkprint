@@ -6,7 +6,7 @@ from fastapi import FastAPI, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
-from . import crawler_zhihu, personas, samples, voice_profile
+from . import browser_auth, crawler_weibo, crawler_zhihu, personas, samples, voice_profile
 from .db import init_db
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -206,12 +206,20 @@ async def sync_source(persona_id: int, source_id: int) -> RedirectResponse:
     source = personas.get_source(source_id)
     if source is None or source["persona_id"] != persona_id:
         raise HTTPException(status_code=404, detail="source not found")
-    if source["platform"] != "zhihu":
-        raise HTTPException(status_code=400, detail=f"unsupported platform: {source['platform']}")
+    platform = source["platform"]
+    identifier = source["identifier"]
     try:
-        result = crawler_zhihu.sync(persona_id, source["identifier"])
-    except crawler_zhihu.CrawlerError as e:
+        if platform == "zhihu":
+            result = crawler_zhihu.sync(persona_id, identifier)
+        elif platform == "weibo":
+            cookie = await browser_auth.ensure_weibo_cookie()
+            result = crawler_weibo.sync(persona_id, identifier, cookie)
+        else:
+            raise HTTPException(status_code=400, detail=f"unsupported platform: {platform}")
+    except (crawler_zhihu.CrawlerError, crawler_weibo.CrawlerError) as e:
         raise HTTPException(status_code=502, detail=str(e)) from e
+    except browser_auth.BrowserAuthError as e:
+        raise HTTPException(status_code=502, detail=f"browser auth failed: {e}") from e
     personas.mark_source_synced(source_id, result.total_count, str(result.sample_path))
     return RedirectResponse(
         url=(
@@ -223,3 +231,11 @@ async def sync_source(persona_id: int, source_id: int) -> RedirectResponse:
         ),
         status_code=303,
     )
+
+
+@app.post("/auth/{platform}/clear")
+async def clear_platform_cookie(platform: str) -> RedirectResponse:
+    if platform not in ("weibo",):
+        raise HTTPException(status_code=400, detail=f"unsupported platform: {platform}")
+    browser_auth.clear_cached(platform)
+    return RedirectResponse(url="/", status_code=303)

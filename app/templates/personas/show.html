@@ -42,6 +42,18 @@
               立即同步
             </button>
           </form>
+          {% if s.platform == "weibo" %}
+            <form method="post"
+                  action="/auth/weibo/clear"
+                  style="margin: 0; display: inline-block;"
+                  onsubmit="return confirm('清掉缓存的微博 cookie，下次同步会重新弹浏览器登录。确定？');">
+              <button type="submit"
+                      style="padding: 0.25rem 0.75rem; font-size: 0.85rem;"
+                      title="cookie 过期或想换号时点这里">
+                重新登录
+              </button>
+            </form>
+          {% endif %}
           <form method="post"
                 action="/personas/{{ persona.id }}/sources/{{ s.id }}/delete"
                 style="margin: 0; display: inline-block;"
@@ -74,14 +86,17 @@
   </form>
 {% endif %}
 
-{% set available_platforms = ["zhihu"] | reject("in", bound_platforms) | list %}
+{% set available_platforms = ["zhihu", "weibo"] | reject("in", bound_platforms) | list %}
 {% if available_platforms %}
   <h2>绑定新源</h2>
   <form method="post" action="/personas/{{ persona.id }}/sources">
     <label for="platform">平台</label>
     <select id="platform" name="platform" required>
       {% if "zhihu" in available_platforms %}
-        <option value="zhihu">知乎</option>
+        <option value="zhihu">知乎（主页 URL）</option>
+      {% endif %}
+      {% if "weibo" in available_platforms %}
+        <option value="weibo">微博（用户 uid，纯数字）</option>
       {% endif %}
       <option value="x" disabled>X（待支持）</option>
       <option value="github" disabled>GitHub（待支持）</option>
@@ -89,7 +104,7 @@
 
     <label for="identifier">用户标识</label>
     <input type="text" id="identifier" name="identifier"
-           placeholder="例如：https://www.zhihu.com/people/xxx" required>
+           placeholder="知乎填主页 URL，微博填 uid（如 2964086533）" required>
 
     <button type="submit">绑定</button>
   </form>
