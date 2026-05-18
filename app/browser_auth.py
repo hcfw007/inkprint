@@ -19,7 +19,9 @@ PROFILES_DIR = ROOT / "data" / "browser_profile"
 COOKIES_DIR = ROOT / "data" / "cookies"
 
 WEIBO_LOGIN_URL = "https://weibo.com"
-WEIBO_LOGIN_MARKER_COOKIES = ("SUB", "SUBP")
+# SUB / SUBP are set even for anonymous visitors. SCF / SSOLoginState are
+# only set after a real login, so use those as the "logged in" marker.
+WEIBO_LOGIN_MARKER_COOKIES = ("SCF", "SSOLoginState")
 LOGIN_POLL_INTERVAL_SECONDS = 1.5
 LOGIN_TIMEOUT_SECONDS = 180
 
