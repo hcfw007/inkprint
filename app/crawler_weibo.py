@@ -11,6 +11,7 @@ non-empty cookie string from the caller.
 
 import json
 import os
+import re
 import shutil
 import subprocess
 from dataclasses import dataclass
@@ -27,6 +28,24 @@ CONFIG_FILE = CRAWLER_DIR / "config.json"
 CONFIG_TEMPLATE = CRAWLER_DIR / "config_default.json.bak"
 OUTPUT_BASE = CRAWLER_DIR / "weibo_data"
 SAMPLES_DIR = ROOT / "samples" / "weibo"
+
+# Posts with these bodies carry no original voice — pure retweets without
+# the user's own comment. weibo-crawler emits a fixed placeholder string.
+NOISE_BODIES: frozenset[str] = frozenset({"转发微博", "转发", "转", "Repost"})
+
+# Substring patterns that mark spammy / non-authorial content. Conservative —
+# we'd rather keep too much than throw away a real post.
+LOTTERY_PATTERNS: tuple[re.Pattern, ...] = (
+    re.compile(r"@微博抽奖平台"),
+    re.compile(r"@?微博抽奖"),
+    re.compile(r"我已参与"),
+    re.compile(r"转发并关注.*抽"),
+    re.compile(r"瓜分奖金"),
+    re.compile(r"中奖名单"),
+)
+
+MIN_TEXT_CHARS = 5
+
 
 # We override only the fields we actively control. Everything else (anti-ban
 # tunables, user agents, retry budgets, ...) stays at the crawler's defaults
@@ -153,9 +172,20 @@ def _to_unix_ts(created_at: str) -> int:
     return 0
 
 
+def _looks_like_noise(text: str) -> bool:
+    stripped = text.strip()
+    if len(stripped) < MIN_TEXT_CHARS:
+        return True
+    if stripped in NOISE_BODIES:
+        return True
+    return any(pat.search(stripped) for pat in LOTTERY_PATTERNS)
+
+
 def _normalize_weibo(item: dict) -> dict | None:
     text = item.get("text") or ""
     if not isinstance(text, str) or not text.strip():
+        return None
+    if _looks_like_noise(text):
         return None
     wid = item.get("id")
     if wid is None:
