@@ -2,6 +2,9 @@
 samples/
 !samples/.gitkeep
 
+# SQLite 数据库不入库
+data/
+
 # 凭证 / cookie / 环境变量
 .env
 .env.*

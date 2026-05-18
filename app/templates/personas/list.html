@@ -1,0 +1,20 @@
+{% extends "layout.html" %}
+{% block title %}人格列表 · inkprint{% endblock %}
+{% block content %}
+<h2>已有人格</h2>
+{% if personas %}
+  <ul class="cards">
+    {% for p in personas %}
+      <li>
+        <a href="/personas/{{ p.id }}">{{ p.name }}</a>
+        {% if p.description %}<div class="muted">{{ p.description }}</div>{% endif %}
+        <div class="muted">创建于 {{ p.created_at }}</div>
+      </li>
+    {% endfor %}
+  </ul>
+{% else %}
+  <div class="empty">
+    还没有人格。<a href="/personas/new">新建一个</a>。
+  </div>
+{% endif %}
+{% endblock %}

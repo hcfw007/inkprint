@@ -1,0 +1,43 @@
+{% extends "layout.html" %}
+{% block title %}{{ persona.name }} · inkprint{% endblock %}
+{% block content %}
+<h2>{{ persona.name }}</h2>
+{% if persona.description %}<p>{{ persona.description }}</p>{% endif %}
+<p class="muted">创建于 {{ persona.created_at }}</p>
+
+<h2>已绑定社媒源</h2>
+{% if sources %}
+  <table>
+    <thead>
+      <tr><th>平台</th><th>标识</th><th>最近同步</th></tr>
+    </thead>
+    <tbody>
+      {% for s in sources %}
+      <tr>
+        <td>{{ s.platform }}</td>
+        <td>{{ s.identifier }}</td>
+        <td>{{ s.last_synced_at or "—" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% else %}
+  <div class="empty">还没有绑定任何社媒源。</div>
+{% endif %}
+
+<h2>绑定新源</h2>
+<form method="post" action="/personas/{{ persona.id }}/sources">
+  <label for="platform">平台</label>
+  <select id="platform" name="platform" required>
+    <option value="zhihu">知乎</option>
+    <option value="x" disabled>X（待支持）</option>
+    <option value="github" disabled>GitHub（待支持）</option>
+  </select>
+
+  <label for="identifier">用户标识</label>
+  <input type="text" id="identifier" name="identifier"
+         placeholder="例如：知乎用户 URL token" required>
+
+  <button type="submit">绑定</button>
+</form>
+{% endblock %}

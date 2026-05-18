@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <title>{% block title %}inkprint{% endblock %}</title>
+    <style>
+      :root {
+        --fg: #222;
+        --muted: #888;
+        --border: #e5e5e5;
+        --accent: #2563eb;
+      }
+      * { box-sizing: border-box; }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", "PingFang SC", sans-serif;
+        max-width: 760px;
+        margin: 0 auto;
+        padding: 2rem 1.5rem 4rem;
+        color: var(--fg);
+        line-height: 1.6;
+      }
+      header { margin-bottom: 2rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border); }
+      header h1 { margin: 0; font-size: 1.4rem; font-weight: 600; }
+      header h1 a { color: var(--fg); text-decoration: none; }
+      header .nav { margin-top: 0.5rem; font-size: 0.9rem; }
+      header .nav a { color: var(--accent); text-decoration: none; margin-right: 1rem; }
+      h2 { font-weight: 600; margin-top: 2rem; }
+      .muted { color: var(--muted); font-size: 0.9rem; }
+      .empty { color: var(--muted); padding: 2rem; text-align: center; border: 1px dashed var(--border); border-radius: 6px; }
+      ul.cards { list-style: none; padding: 0; }
+      ul.cards li {
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 1rem;
+        margin-bottom: 0.75rem;
+      }
+      ul.cards li a { color: var(--fg); text-decoration: none; font-weight: 500; }
+      form { margin: 1rem 0; }
+      form label { display: block; margin: 0.75rem 0 0.25rem; font-size: 0.9rem; color: var(--muted); }
+      form input[type=text], form textarea, form select {
+        width: 100%; padding: 0.5rem; border: 1px solid var(--border); border-radius: 4px; font: inherit;
+      }
+      form button {
+        margin-top: 1rem; padding: 0.5rem 1.2rem; border: 0; border-radius: 4px;
+        background: var(--accent); color: white; font: inherit; cursor: pointer;
+      }
+      table { width: 100%; border-collapse: collapse; margin-top: 0.5rem; }
+      table th, table td { text-align: left; padding: 0.5rem; border-bottom: 1px solid var(--border); font-size: 0.9rem; }
+      table th { color: var(--muted); font-weight: 500; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1><a href="/">inkprint</a></h1>
+      <div class="nav">
+        <a href="/">人格列表</a>
+        <a href="/personas/new">新建人格</a>
+      </div>
+    </header>
+    {% block content %}{% endblock %}
+  </body>
+</html>
