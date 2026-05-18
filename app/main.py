@@ -76,10 +76,18 @@ async def show_persona(
     unchanged: int | None = None,
     total: int | None = None,
     profile: str | None = None,
+    author: str | None = None,
 ) -> HTMLResponse:
     persona = personas.get(persona_id)
     if persona is None:
         raise HTTPException(status_code=404, detail="persona not found")
+    profile_md = voice_profile.read_existing(persona_id)
+    author_text = persona["author_text"] or ""
+    author_goal = persona["author_goal"] or ""
+    detected_author, detected_goal = ("", "")
+    if profile_md:
+        profile_md = voice_profile.apply_author_overrides(profile_md, author_text, author_goal)
+        detected_author, detected_goal = voice_profile.extract_author_block(profile_md)
     return templates.TemplateResponse(
         request,
         "personas/show.html",
@@ -93,7 +101,11 @@ async def show_persona(
                 else None
             ),
             "profile_generated": profile == "ok",
-            "profile_md": voice_profile.read_existing(persona_id),
+            "author_saved": author == "saved",
+            "profile_md": profile_md,
+            "author_text": author_text or detected_author,
+            "author_goal": author_goal or detected_goal,
+            "author_is_override": bool(author_text or author_goal),
         },
     )
 
@@ -160,13 +172,30 @@ async def show_sample(request: Request, persona_id: int, idx: int) -> HTMLRespon
 
 @app.post("/personas/{persona_id}/profile")
 async def generate_profile(persona_id: int) -> RedirectResponse:
-    if personas.get(persona_id) is None:
+    persona = personas.get(persona_id)
+    if persona is None:
         raise HTTPException(status_code=404, detail="persona not found")
     try:
-        voice_profile.generate(persona_id)
+        voice_profile.generate(
+            persona_id,
+            author_text=persona["author_text"] or "",
+            author_goal=persona["author_goal"] or "",
+        )
     except voice_profile.ProfileError as e:
         raise HTTPException(status_code=502, detail=str(e)) from e
     return RedirectResponse(url=f"/personas/{persona_id}?profile=ok", status_code=303)
+
+
+@app.post("/personas/{persona_id}/author")
+async def update_author(
+    persona_id: int,
+    author_text: str = Form(""),
+    author_goal: str = Form(""),
+) -> RedirectResponse:
+    if personas.get(persona_id) is None:
+        raise HTTPException(status_code=404, detail="persona not found")
+    personas.update_author(persona_id, author_text, author_goal)
+    return RedirectResponse(url=f"/personas/{persona_id}?author=saved", status_code=303)
 
 
 @app.get("/personas/{persona_id}/profile/versions", response_class=HTMLResponse)

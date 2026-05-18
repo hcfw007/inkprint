@@ -8,11 +8,15 @@ Pipeline:
   5. Write the profile to profiles/{persona_id}.md.
 """
 
+import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
 from . import llm, samples
+
+AUTHOR_LINE_RE = re.compile(r"^Author\s*[:：]\s*(.*?)\s*$", re.MULTILINE)
+GOAL_LINE_RE = re.compile(r"^Goal\s*[:：]\s*(.*?)\s*$", re.MULTILINE)
 
 ROOT = Path(__file__).resolve().parent.parent
 PROFILES_DIR = ROOT / "profiles"
@@ -125,7 +129,37 @@ def _platform_breakdown(samples_used: list[dict], total_count: int) -> str:
     )
 
 
-def _build_prompt(samples_used: list[dict], total_count: int) -> list[dict[str, str]]:
+def extract_author_block(profile_md: str) -> tuple[str, str]:
+    """Return (author, goal) parsed from a VOICE PROFILE markdown body.
+
+    Empty strings are returned when a line is missing — callers should not
+    treat an empty result as an error.
+    """
+    author = AUTHOR_LINE_RE.search(profile_md)
+    goal = GOAL_LINE_RE.search(profile_md)
+    return (author.group(1).strip() if author else "", goal.group(1).strip() if goal else "")
+
+
+def apply_author_overrides(profile_md: str, author_text: str, author_goal: str) -> str:
+    """Overlay user-edited Author / Goal lines on top of an LLM-generated profile.
+
+    Leaves the file on disk untouched — overlay happens at display time so
+    profile history stays faithful to what the model produced.
+    """
+    out = profile_md
+    if author_text:
+        out = AUTHOR_LINE_RE.sub(f"Author: {author_text}", out, count=1)
+    if author_goal:
+        out = GOAL_LINE_RE.sub(f"Goal: {author_goal}", out, count=1)
+    return out
+
+
+def _build_prompt(
+    samples_used: list[dict],
+    total_count: int,
+    author_text: str = "",
+    author_goal: str = "",
+) -> list[dict[str, str]]:
     formatted = [_format_sample(i, s) for i, s in enumerate(samples_used, 1)]
     samples_block = "\n\n---\n\n".join(formatted)
     breakdown = _platform_breakdown(samples_used, total_count)
@@ -141,10 +175,22 @@ def _build_prompt(samples_used: list[dict], total_count: int) -> list[dict[str, 
         "also be in Chinese."
     )
 
+    confirmed_facts = ""
+    if author_text or author_goal:
+        lines = [
+            "",
+            "以下是用户已经确认过的事实，请在 Author / Goal 字段直接使用这些值，不要改写：",
+        ]
+        if author_text:
+            lines.append(f"- Author: {author_text}")
+        if author_goal:
+            lines.append(f"- Goal: {author_goal}")
+        confirmed_facts = "\n".join(lines) + "\n"
+
     user = f"""请基于以下来自同一作者的多平台社媒样本，输出 VOICE PROFILE。
 
 {breakdown}。
-
+{confirmed_facts}
 样本：
 
 {samples_block}
@@ -201,14 +247,23 @@ Channel Notes
     ]
 
 
-def generate(persona_id: int) -> ProfileResult:
+def generate(
+    persona_id: int,
+    author_text: str = "",
+    author_goal: str = "",
+) -> ProfileResult:
     samples = _load_samples(persona_id)
     if not samples:
         raise ProfileError("sample file is empty")
     picked = _pick_representative(samples)
     if not picked:
         raise ProfileError(f"no samples passed the minimum length ({SAMPLE_MIN_CHARS} chars)")
-    messages = _build_prompt(picked, total_count=len(samples))
+    messages = _build_prompt(
+        picked,
+        total_count=len(samples),
+        author_text=author_text,
+        author_goal=author_goal,
+    )
     try:
         profile_md = llm.chat(messages)
     except llm.LLMError as e:

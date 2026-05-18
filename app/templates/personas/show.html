@@ -10,6 +10,9 @@
 {% if profile_generated %}
   <div class="flash">Voice profile 已生成</div>
 {% endif %}
+{% if author_saved %}
+  <div class="flash">Author / Goal 已保存，下次重新生成 profile 时会作为确认事实喂给 LLM</div>
+{% endif %}
 
 <h2>{{ persona.name }}</h2>
 {% if persona.description %}<p>{{ persona.description }}</p>{% endif %}
@@ -95,6 +98,20 @@
     <button type="submit">绑定</button>
   </form>
 {% endif %}
+
+<h2>Author / Goal{% if author_is_override %} <span class="muted" style="font-size: 0.7em;">(已人工确认)</span>{% endif %}</h2>
+<p class="muted" style="font-size: 0.85rem;">
+  这两项会覆盖 Voice Profile 里 LLM 生成的对应字段，并在下次重新生成时作为确认事实喂回去，防止幻觉。
+</p>
+<form method="post" action="/personas/{{ persona.id }}/author">
+  <label for="author_text">Author</label>
+  <textarea id="author_text" name="author_text" rows="2"
+            placeholder="对作者的简短画像：身份、年龄段、领域、性格、立场倾向">{{ author_text }}</textarea>
+  <label for="author_goal">Goal</label>
+  <textarea id="author_goal" name="author_goal" rows="2"
+            placeholder="作者发文的核心目的">{{ author_goal }}</textarea>
+  <button type="submit">保存</button>
+</form>
 
 <h2>Voice Profile</h2>
 {% if profile_md %}

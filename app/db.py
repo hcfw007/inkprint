@@ -38,6 +38,8 @@ CREATE TABLE IF NOT EXISTS source_bindings (
 COLUMN_MIGRATIONS = (
     ("source_bindings", "last_synced_count", "INTEGER"),
     ("source_bindings", "last_sample_path", "TEXT"),
+    ("personas", "author_text", "TEXT"),
+    ("personas", "author_goal", "TEXT"),
 )
 
 

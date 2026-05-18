@@ -16,9 +16,18 @@ def list_all() -> list[sqlite3.Row]:
 def get(persona_id: int) -> sqlite3.Row | None:
     with connect() as conn:
         return conn.execute(
-            "SELECT id, name, description, created_at FROM personas WHERE id = ?",
+            "SELECT id, name, description, created_at, author_text, author_goal "
+            "FROM personas WHERE id = ?",
             (persona_id,),
         ).fetchone()
+
+
+def update_author(persona_id: int, author_text: str, author_goal: str) -> None:
+    with connect() as conn:
+        conn.execute(
+            "UPDATE personas SET author_text = ?, author_goal = ? WHERE id = ?",
+            (author_text.strip() or None, author_goal.strip() or None, persona_id),
+        )
 
 
 def create(name: str, description: str | None) -> int:
