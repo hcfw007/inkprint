@@ -18,6 +18,7 @@ dev = [
 
 [tool.ruff]
 line-length = 100
+extend-exclude = ["crawlers"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "UP", "B", "SIM"]

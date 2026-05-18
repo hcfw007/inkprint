@@ -10,11 +10,12 @@
     {% for s in items %}
       <li>
         <a href="/personas/{{ persona.id }}/samples/{{ s.idx }}">
-          {{ s.question_title or "（无标题）" }}
+          {{ s.question_title or s.snippet }}
         </a>
-        <div class="muted">{{ s.snippet }}</div>
+        {% if s.question_title %}<div class="muted">{{ s.snippet }}</div>{% endif %}
         <div class="muted" style="margin-top: 0.3rem;">
-          {{ s.content_type }} · {{ s.char_count }} 字 · 👍 {{ s.voteup_count }}
+          {{ s.platform }} · {{ s.content_type }} ·
+          {{ s.char_count }} 字 · 👍 {{ s.voteup_count }}
         </div>
       </li>
     {% endfor %}

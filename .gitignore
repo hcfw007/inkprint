@@ -11,6 +11,7 @@
 
 # 第三方爬虫子项目（按 README 步骤本地克隆和安装）
 /crawlers/zhihu/
+/crawlers/weibo/
 
 # 凭证 / cookie / 环境变量（保留 .env.example 作为模板）
 .env

@@ -90,7 +90,7 @@ def _harvest(persona_id: int, output_file: Path) -> CrawlResult:
     # Snapshot the prior union BEFORE copying the new dump in.
     prior = {
         item["content_id"]: item
-        for item in samples.load_merged(persona_id)
+        for item in samples.load_merged(persona_id, platform="zhihu")
         if isinstance(item.get("content_id"), str)
     }
 
@@ -118,7 +118,7 @@ def _harvest(persona_id: int, output_file: Path) -> CrawlResult:
     return CrawlResult(
         sample_path=target,
         item_count=len(dump),
-        total_count=len(samples.load_merged(persona_id)),
+        total_count=len(samples.load_merged(persona_id, platform="zhihu")),
         added_count=added,
         updated_count=updated,
         unchanged_count=unchanged,
