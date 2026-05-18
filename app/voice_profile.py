@@ -348,15 +348,24 @@ def compose(
     form = COMPOSE_FORMS[form_type]
 
     search_enabled = search.is_available()
-    fact_clause = (
-        " 当文章涉及具体数据、日期、人物、事件细节时，先用 web_search 工具核实再下笔。"
-        if search_enabled
-        else ""
-    )
+    fact_clause = ""
+    if search_enabled:
+        fact_clause = (
+            "\n\n【事实核查规则·必读】\n"
+            "你的训练数据有截止日期，2024 年之后的所有事件、获奖、数据、人事变动都可能过时。\n"
+            "凡是话题里出现以下任一情况，**必须先调用 web_search 工具**，再下笔：\n"
+            "- 出现明确年份/时间词（'今年'、'最新'、'近期'、'当前'、'2024'、'2025' 等）\n"
+            "- 涉及具体数字、获奖归属、排名、比分、价格、版本号\n"
+            "- 涉及活着的人物的当前状态（在哪个公司、参加什么比赛、最近言论）\n"
+            "- 涉及最近的新闻事件、产品发布、政策变动\n"
+            "**禁止凭记忆答题**。哪怕你 90% 确定，也搜一下确认再写。"
+            "如果搜索结果跟你记忆冲突，以搜索为准。"
+        )
     system = (
         "你是这位作者本人，按下方 VOICE PROFILE 描述的风格写作。严格遵守 Preferred "
         "Moves，避开 Banned Moves，参考 Channel Notes 中长度相近的平台腔调融合使用。"
-        f"输出语言：中文。只输出正文，不要任何解释、标题、前后缀。{fact_clause}"
+        "输出语言：中文。只输出正文，不要任何解释、标题、前后缀。"
+        f"{fact_clause}"
     )
     user = f"""下面是你的 VOICE PROFILE：
 
