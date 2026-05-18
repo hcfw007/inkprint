@@ -1,0 +1,23 @@
+{% extends "layout.html" %}
+{% block title %}样本 · inkprint{% endblock %}
+{% block content %}
+<p class="muted">
+  <a href="/personas/{{ persona.id }}/samples">← 返回 {{ persona.name }} 的样本列表</a>
+</p>
+
+{% if item.question_title %}<h2>{{ item.question_title }}</h2>{% endif %}
+{% if item.question_detail %}
+  <div class="muted" style="margin-bottom: 1rem;">{{ item.question_detail }}</div>
+{% endif %}
+
+<div class="meta muted">
+  {{ item.content_type }} ·
+  👍 {{ item.voteup_count }} ·
+  💬 {{ item.comment_count }} ·
+  {% if item.content_url %}
+    <a href="{{ item.content_url }}" target="_blank" rel="noopener">在知乎查看 ↗</a>
+  {% endif %}
+</div>
+
+<article class="sample-body">{{ item.content_text }}</article>
+{% endblock %}

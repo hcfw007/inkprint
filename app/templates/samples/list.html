@@ -1,0 +1,25 @@
+{% extends "layout.html" %}
+{% block title %}{{ persona.name }} 的样本 · inkprint{% endblock %}
+{% block content %}
+<p class="muted"><a href="/personas/{{ persona.id }}">← 返回 {{ persona.name }}</a></p>
+<h2>{{ persona.name }} 的样本</h2>
+<p class="muted">共 {{ items|length }} 条 · 按点赞数 / 字数排序</p>
+
+{% if items %}
+  <ul class="cards">
+    {% for s in items %}
+      <li>
+        <a href="/personas/{{ persona.id }}/samples/{{ s.idx }}">
+          {{ s.question_title or "（无标题）" }}
+        </a>
+        <div class="muted">{{ s.snippet }}</div>
+        <div class="muted" style="margin-top: 0.3rem;">
+          {{ s.content_type }} · {{ s.char_count }} 字 · 👍 {{ s.voteup_count }}
+        </div>
+      </li>
+    {% endfor %}
+  </ul>
+{% else %}
+  <div class="empty">还没有样本。回到人格页点"立即同步"。</div>
+{% endif %}
+{% endblock %}

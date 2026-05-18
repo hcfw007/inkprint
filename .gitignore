@@ -1,16 +1,17 @@
-# 原始采集数据不入库
-samples/
-!samples/.gitkeep
+# 原始采集数据不入库（只 ignore 根目录的，别误伤 app/templates/samples/）
+/samples/
+!/samples/.gitkeep
 
 # SQLite 数据库不入库
-data/
+/data/
 
 # 第三方爬虫子项目（按 README 步骤本地克隆和安装）
-crawlers/zhihu/
+/crawlers/zhihu/
 
-# 凭证 / cookie / 环境变量
+# 凭证 / cookie / 环境变量（保留 .env.example 作为模板）
 .env
-.env.*
+.env.local
+.env.*.local
 *.cookie
 *.session
 cookies/
