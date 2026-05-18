@@ -132,7 +132,9 @@ def _clean_env() -> dict[str, str]:
 
 
 def _latest_output(uid: str) -> Path:
-    user_dir = OUTPUT_BASE / uid / "json"
+    # When user_id_as_folder_name=1 weibo-crawler writes
+    # weibo_data/{uid}/{uid}.json (flat, no json/ subdir).
+    user_dir = OUTPUT_BASE / uid
     if not user_dir.exists():
         raise CrawlerError(f"crawler produced no output dir: {user_dir}")
     candidates = sorted(user_dir.glob("*.json"))
