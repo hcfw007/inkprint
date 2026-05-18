@@ -83,11 +83,10 @@ async def show_persona(
         raise HTTPException(status_code=404, detail="persona not found")
     profile_md = voice_profile.read_existing(persona_id)
     author_text = persona["author_text"] or ""
-    author_goal = persona["author_goal"] or ""
-    detected_author, detected_goal = ("", "")
+    detected_author = ""
     if profile_md:
-        profile_md = voice_profile.apply_author_overrides(profile_md, author_text, author_goal)
-        detected_author, detected_goal = voice_profile.extract_author_block(profile_md)
+        profile_md = voice_profile.apply_author_overrides(profile_md, author_text)
+        detected_author = voice_profile.extract_author(profile_md)
     return templates.TemplateResponse(
         request,
         "personas/show.html",
@@ -104,8 +103,7 @@ async def show_persona(
             "author_saved": author == "saved",
             "profile_md": profile_md,
             "author_text": author_text or detected_author,
-            "author_goal": author_goal or detected_goal,
-            "author_is_override": bool(author_text or author_goal),
+            "author_is_override": bool(author_text),
         },
     )
 
@@ -176,11 +174,7 @@ async def generate_profile(persona_id: int) -> RedirectResponse:
     if persona is None:
         raise HTTPException(status_code=404, detail="persona not found")
     try:
-        voice_profile.generate(
-            persona_id,
-            author_text=persona["author_text"] or "",
-            author_goal=persona["author_goal"] or "",
-        )
+        voice_profile.generate(persona_id, author_text=persona["author_text"] or "")
     except voice_profile.ProfileError as e:
         raise HTTPException(status_code=502, detail=str(e)) from e
     return RedirectResponse(url=f"/personas/{persona_id}?profile=ok", status_code=303)
@@ -190,11 +184,10 @@ async def generate_profile(persona_id: int) -> RedirectResponse:
 async def update_author(
     persona_id: int,
     author_text: str = Form(""),
-    author_goal: str = Form(""),
 ) -> RedirectResponse:
     if personas.get(persona_id) is None:
         raise HTTPException(status_code=404, detail="persona not found")
-    personas.update_author(persona_id, author_text, author_goal)
+    personas.update_author(persona_id, author_text)
     return RedirectResponse(url=f"/personas/{persona_id}?author=saved", status_code=303)
 
 
@@ -234,7 +227,6 @@ async def compose_submit(
             form_type=form_type,
             topic=topic,
             author_text=persona["author_text"] or "",
-            author_goal=persona["author_goal"] or "",
         )
     except voice_profile.ProfileError as e:
         error = str(e)

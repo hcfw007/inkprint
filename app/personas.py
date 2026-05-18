@@ -22,11 +22,11 @@ def get(persona_id: int) -> sqlite3.Row | None:
         ).fetchone()
 
 
-def update_author(persona_id: int, author_text: str, author_goal: str) -> None:
+def update_author(persona_id: int, author_text: str) -> None:
     with connect() as conn:
         conn.execute(
-            "UPDATE personas SET author_text = ?, author_goal = ? WHERE id = ?",
-            (author_text.strip() or None, author_goal.strip() or None, persona_id),
+            "UPDATE personas SET author_text = ? WHERE id = ?",
+            (author_text.strip() or None, persona_id),
         )
 
 

@@ -11,7 +11,7 @@
   <div class="flash">Voice profile 已生成</div>
 {% endif %}
 {% if author_saved %}
-  <div class="flash">Author / Goal 已保存，下次重新生成 profile 时会作为确认事实喂给 LLM</div>
+  <div class="flash">Author 履历已保存，下次重新生成 profile 时会作为确认事实喂给 LLM</div>
 {% endif %}
 
 <h2>{{ persona.name }}</h2>
@@ -99,17 +99,15 @@
   </form>
 {% endif %}
 
-<h2>Author / Goal{% if author_is_override %} <span class="muted" style="font-size: 0.7em;">(已人工确认)</span>{% endif %}</h2>
+<h2>Author 履历{% if author_is_override %} <span class="muted" style="font-size: 0.7em;">(已人工确认)</span>{% endif %}</h2>
 <p class="muted" style="font-size: 0.85rem;">
-  这两项会覆盖 Voice Profile 里 LLM 生成的对应字段，并在下次重新生成时作为确认事实喂回去，防止幻觉。
+  填你的客观履历（姓名 / 年龄段 / 职业 / 教育 / 关键经历）。会覆盖 LLM 在 Author 字段的推断，
+  并在下次重新生成时作为确认事实喂回去，防止把 30 岁猜成 40 岁、把工程师猜成产品经理这类幻觉。
 </p>
 <form method="post" action="/personas/{{ persona.id }}/author">
   <label for="author_text">Author</label>
-  <textarea id="author_text" name="author_text" rows="2"
-            placeholder="对作者的简短画像：身份、年龄段、领域、性格、立场倾向">{{ author_text }}</textarea>
-  <label for="author_goal">Goal</label>
-  <textarea id="author_goal" name="author_goal" rows="2"
-            placeholder="作者发文的核心目的">{{ author_goal }}</textarea>
+  <textarea id="author_text" name="author_text" rows="3"
+            placeholder="例如：王楠，30 岁，后端工程师，本科 XX 大学计算机系，留学澳洲两年">{{ author_text }}</textarea>
   <button type="submit">保存</button>
 </form>
 
