@@ -5,10 +5,18 @@
 {% if personas %}
   <ul class="cards">
     {% for p in personas %}
-      <li>
-        <a href="/personas/{{ p.id }}">{{ p.name }}</a>
-        {% if p.description %}<div class="muted">{{ p.description }}</div>{% endif %}
-        <div class="muted">创建于 {{ p.created_at }}</div>
+      <li style="display: flex; align-items: center; gap: 1rem;">
+        <div style="flex: 1; min-width: 0;">
+          <a href="/personas/{{ p.id }}">{{ p.name }}</a>
+          {% if p.description %}<div class="muted">{{ p.description }}</div>{% endif %}
+          <div class="muted">创建于 {{ p.created_at }}</div>
+        </div>
+        <a href="/personas/{{ p.id }}/compose"
+           style="padding: 0.4rem 0.9rem; background: var(--accent); color: white;
+                  border-radius: 4px; text-decoration: none; font-size: 0.9rem;
+                  white-space: nowrap;">
+          按 ta 的口吻写一篇 →
+        </a>
       </li>
     {% endfor %}
   </ul>
