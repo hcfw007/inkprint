@@ -11,18 +11,44 @@ non-empty cookie string from the caller.
 
 import json
 import os
+import shutil
 import subprocess
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+
+import json5
 
 from . import samples
 
 ROOT = Path(__file__).resolve().parent.parent
 CRAWLER_DIR = ROOT / "crawlers" / "weibo"
 CONFIG_FILE = CRAWLER_DIR / "config.json"
+CONFIG_TEMPLATE = CRAWLER_DIR / "config_default.json.bak"
 OUTPUT_BASE = CRAWLER_DIR / "weibo_data"
 SAMPLES_DIR = ROOT / "samples" / "weibo"
+
+# We override only the fields we actively control. Everything else (anti-ban
+# tunables, user agents, retry budgets, ...) stays at the crawler's defaults
+# so we do not have to track its schema across upgrades.
+CONFIG_OVERRIDES: tuple[str, ...] = (
+    "user_id_list",
+    "cookie",
+    "write_mode",
+    "output_directory",
+    "user_id_as_folder_name",
+    "since_date",
+    "end_date",
+    "original_pic_download",
+    "retweet_pic_download",
+    "original_video_download",
+    "retweet_video_download",
+    "original_live_photo_download",
+    "retweet_live_photo_download",
+    "download_comment",
+    "download_repost",
+    "remove_html_tag",
+)
 
 PROXY_ENV_KEYS = (
     "all_proxy",
@@ -50,16 +76,32 @@ class CrawlResult:
     unchanged_count: int
 
 
-def _build_config(uid: str, cookie: str) -> dict:
-    """Minimal valid config for weibo-crawler — all fields it validates upfront."""
-    return {
+def _read_template_config() -> dict:
+    """Load the crawler's pristine config as our base.
+
+    Prefer config_default.json.bak (a snapshot taken on first install,
+    preserves the json5 comments); fall back to config.json if that's
+    missing (works for both json5 originals and plain JSON rewrites).
+    """
+    sources = [p for p in (CONFIG_TEMPLATE, CONFIG_FILE) if p.exists()]
+    if not sources:
+        raise CrawlerError(
+            f"no weibo config template found under {CRAWLER_DIR}. "
+            "Did you clone dataabc/weibo-crawler under crawlers/weibo/?"
+        )
+    return json5.loads(sources[0].read_text(encoding="utf-8"))
+
+
+def _write_config(uid: str, cookie: str) -> None:
+    cfg = _read_template_config()
+    overrides = {
         "user_id_list": [uid],
-        "only_crawl_original": 0,
+        "cookie": cookie,
+        "write_mode": ["json"],
+        "output_directory": "weibo_data",
+        "user_id_as_folder_name": 1,
         "since_date": "2005-01-01",
         "end_date": "",
-        "start_page": 1,
-        "page_weibo_count": 20,
-        "write_mode": ["json"],
         "original_pic_download": 0,
         "retweet_pic_download": 0,
         "original_video_download": 0,
@@ -67,33 +109,17 @@ def _build_config(uid: str, cookie: str) -> dict:
         "original_live_photo_download": 0,
         "retweet_live_photo_download": 0,
         "download_comment": 0,
-        "comment_max_download_count": 0,
-        "comment_pic_download": 0,
         "download_repost": 0,
-        "repost_max_download_count": 0,
-        "output_directory": "weibo_data",
-        "user_id_as_folder_name": 1,
         "remove_html_tag": 1,
-        "cookie": cookie,
-        "sqlite_db_path": "weibodata.db",
-        "mysql_config": {
-            "host": "localhost",
-            "port": 3306,
-            "user": "root",
-            "password": "",
-            "charset": "utf8mb4",
-        },
-        "store_binary_in_sqlite": 0,
-        "mongodb_URI": "",
-        "post_config": {"api_url": "", "api_token": ""},
-        "anti_ban_config": {"enabled": True, "max_weibo_per_session": 2000},
     }
-
-
-def _write_config(uid: str, cookie: str) -> None:
-    CRAWLER_DIR.mkdir(parents=True, exist_ok=True)
+    for key in CONFIG_OVERRIDES:
+        if key in overrides:
+            cfg[key] = overrides[key]
+    # Seed the bak file on first run so future syncs always have a clean base.
+    if not CONFIG_TEMPLATE.exists() and CONFIG_FILE.exists():
+        shutil.copy2(CONFIG_FILE, CONFIG_TEMPLATE)
     CONFIG_FILE.write_text(
-        json.dumps(_build_config(uid, cookie), ensure_ascii=False, indent=2),
+        json.dumps(cfg, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
 
