@@ -2,6 +2,10 @@
 /samples/
 !/samples/.gitkeep
 
+# 生成的 voice profile 是个人数据，不入库
+/profiles/
+!/profiles/.gitkeep
+
 # SQLite 数据库不入库
 /data/
 
