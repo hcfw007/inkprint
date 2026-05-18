@@ -53,3 +53,20 @@ def add_source(persona_id: int, platform: str, identifier: str) -> dict[str, Any
             return {"ok": True}
         except sqlite3.IntegrityError as e:
             return {"ok": False, "error": str(e)}
+
+
+def get_source(source_id: int) -> sqlite3.Row | None:
+    with connect() as conn:
+        return conn.execute(
+            "SELECT id, persona_id, platform, identifier, last_synced_at "
+            "FROM source_bindings WHERE id = ?",
+            (source_id,),
+        ).fetchone()
+
+
+def mark_source_synced(source_id: int) -> None:
+    with connect() as conn:
+        conn.execute(
+            "UPDATE source_bindings SET last_synced_at = datetime('now') WHERE id = ?",
+            (source_id,),
+        )

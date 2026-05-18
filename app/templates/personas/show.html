@@ -9,7 +9,7 @@
 {% if sources %}
   <table>
     <thead>
-      <tr><th>平台</th><th>标识</th><th>最近同步</th></tr>
+      <tr><th>平台</th><th>标识</th><th>最近同步</th><th></th></tr>
     </thead>
     <tbody>
       {% for s in sources %}
@@ -17,6 +17,15 @@
         <td>{{ s.platform }}</td>
         <td>{{ s.identifier }}</td>
         <td>{{ s.last_synced_at or "—" }}</td>
+        <td>
+          <form method="post"
+                action="/personas/{{ persona.id }}/sources/{{ s.id }}/sync"
+                style="margin: 0;">
+            <button type="submit" style="padding: 0.25rem 0.75rem; font-size: 0.85rem;">
+              立即同步
+            </button>
+          </form>
+        </td>
       </tr>
       {% endfor %}
     </tbody>

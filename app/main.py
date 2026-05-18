@@ -5,7 +5,7 @@ from fastapi import FastAPI, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
-from . import personas
+from . import crawler_zhihu, personas
 from .db import init_db
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -69,4 +69,19 @@ async def add_source(
     result = personas.add_source(persona_id, platform, identifier)
     if not result["ok"]:
         raise HTTPException(status_code=400, detail=result["error"])
+    return RedirectResponse(url=f"/personas/{persona_id}", status_code=303)
+
+
+@app.post("/personas/{persona_id}/sources/{source_id}/sync")
+async def sync_source(persona_id: int, source_id: int) -> RedirectResponse:
+    source = personas.get_source(source_id)
+    if source is None or source["persona_id"] != persona_id:
+        raise HTTPException(status_code=404, detail="source not found")
+    if source["platform"] != "zhihu":
+        raise HTTPException(status_code=400, detail=f"unsupported platform: {source['platform']}")
+    try:
+        crawler_zhihu.sync(persona_id, source["identifier"])
+    except crawler_zhihu.CrawlerError as e:
+        raise HTTPException(status_code=502, detail=str(e)) from e
+    personas.mark_source_synced(source_id)
     return RedirectResponse(url=f"/personas/{persona_id}", status_code=303)
