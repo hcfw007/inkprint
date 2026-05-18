@@ -19,10 +19,7 @@ from dataclasses import dataclass
 from typing import Any
 
 import httpx
-from dotenv import load_dotenv
 from openai import OpenAI
-
-load_dotenv()
 
 # DeepSeek and other CN-hosted LLM providers must be reached directly — clash
 # style auto-proxies will route foreign-looking domains through an overseas
