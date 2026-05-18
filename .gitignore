@@ -1,0 +1,26 @@
+# 原始采集数据不入库
+samples/
+!samples/.gitkeep
+
+# 凭证 / cookie / 环境变量
+.env
+.env.*
+*.cookie
+*.session
+cookies/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# Node
+node_modules/
+dist/
+
+# 编辑器 / 系统
+.DS_Store
+.idea/
+.vscode/
