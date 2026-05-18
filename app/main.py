@@ -198,6 +198,63 @@ async def update_author(
     return RedirectResponse(url=f"/personas/{persona_id}?author=saved", status_code=303)
 
 
+@app.get("/personas/{persona_id}/compose", response_class=HTMLResponse)
+async def compose_form(request: Request, persona_id: int) -> HTMLResponse:
+    persona = personas.get(persona_id)
+    if persona is None:
+        raise HTTPException(status_code=404, detail="persona not found")
+    bound = personas.bound_platforms(persona_id)
+    return templates.TemplateResponse(
+        request,
+        "personas/compose.html",
+        {
+            "persona": persona,
+            "bound_platforms": sorted(bound) if bound else ["zhihu"],
+            "topic": "",
+            "platform": "",
+            "result": None,
+            "error": None,
+        },
+    )
+
+
+@app.post("/personas/{persona_id}/compose", response_class=HTMLResponse)
+async def compose_submit(
+    request: Request,
+    persona_id: int,
+    topic: str = Form(""),
+    platform: str = Form(...),
+) -> HTMLResponse:
+    persona = personas.get(persona_id)
+    if persona is None:
+        raise HTTPException(status_code=404, detail="persona not found")
+    result: str | None = None
+    error: str | None = None
+    try:
+        result = voice_profile.compose(
+            persona_id,
+            platform=platform,
+            topic=topic,
+            author_text=persona["author_text"] or "",
+            author_goal=persona["author_goal"] or "",
+        )
+    except voice_profile.ProfileError as e:
+        error = str(e)
+    bound = personas.bound_platforms(persona_id)
+    return templates.TemplateResponse(
+        request,
+        "personas/compose.html",
+        {
+            "persona": persona,
+            "bound_platforms": sorted(bound) if bound else ["zhihu"],
+            "topic": topic,
+            "platform": platform,
+            "result": result,
+            "error": error,
+        },
+    )
+
+
 @app.get("/personas/{persona_id}/profile/versions", response_class=HTMLResponse)
 async def list_profile_versions(request: Request, persona_id: int) -> HTMLResponse:
     persona = personas.get(persona_id)

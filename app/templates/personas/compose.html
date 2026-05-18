@@ -1,0 +1,36 @@
+{% extends "layout.html" %}
+{% block title %}用 {{ persona.name }} 的口吻写作 · inkprint{% endblock %}
+{% block content %}
+<p class="muted"><a href="/personas/{{ persona.id }}">← 返回 {{ persona.name }}</a></p>
+<h2>用 {{ persona.name }} 的口吻写作</h2>
+<p class="muted">填一段思路 / 素材 / 草稿 → 选目标平台 → 生成对应风格的成稿。会读取该人格当前的 voice profile。</p>
+
+{% if error %}
+  <div class="flash" style="background: #fef2f2; border-color: #fecaca; color: #991b1b;">
+    {{ error }}
+  </div>
+{% endif %}
+
+<form method="post" action="/personas/{{ persona.id }}/compose">
+  <label for="platform">目标平台</label>
+  <select id="platform" name="platform" required>
+    {% for p in bound_platforms %}
+      <option value="{{ p }}" {% if p == platform %}selected{% endif %}>
+        {{ {"zhihu": "知乎", "weibo": "微博"}.get(p, p) }}
+      </option>
+    {% endfor %}
+  </select>
+
+  <label for="topic">思路 / 素材 / 草稿</label>
+  <textarea id="topic" name="topic" rows="6"
+            placeholder="想写啥，先这里塞一段，可以是要点、可以是别人原文、可以是一句吐槽..."
+            required>{{ topic }}</textarea>
+
+  <button type="submit">按风格生成</button>
+</form>
+
+{% if result %}
+  <h2 style="margin-top: 2.5rem;">生成结果</h2>
+  <article class="sample-body">{{ result }}</article>
+{% endif %}
+{% endblock %}

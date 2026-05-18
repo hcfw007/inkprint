@@ -301,6 +301,57 @@ def list_versions(persona_id: int) -> list[ProfileVersion]:
     return versions
 
 
+COMPOSE_LENGTH_HINT = {
+    "zhihu": "200 到 800 字之间，可分段；如果话题适合，用作者偏好的'先抛结论再展开'结构",
+    "weibo": "30 到 280 字，单段更自然；可以用 //@ 转评体或直接表态",
+}
+
+COMPOSE_PLATFORM_LABEL = {"zhihu": "知乎", "weibo": "微博"}
+
+
+def compose(
+    persona_id: int,
+    platform: str,
+    topic: str,
+    author_text: str = "",
+    author_goal: str = "",
+) -> str:
+    """Generate a post in the persona's voice for the given platform."""
+    profile_md = read_existing(persona_id)
+    if not profile_md:
+        raise ProfileError("尚未生成 voice profile，先生成 profile 再来写")
+    profile_md = apply_author_overrides(profile_md, author_text, author_goal)
+    label = COMPOSE_PLATFORM_LABEL.get(platform, platform)
+    length_hint = COMPOSE_LENGTH_HINT.get(platform, "长度自定")
+    if not topic.strip():
+        raise ProfileError("输入文本不能为空")
+
+    system = (
+        "你是这位作者本人，按下方 VOICE PROFILE 描述的风格写作。严格遵守 Preferred "
+        "Moves，避开 Banned Moves，按 Channel Notes 里对应平台的腔调微调。"
+        "输出语言：中文。只输出正文，不要任何解释、标题、前后缀。"
+    )
+    user = f"""下面是你的 VOICE PROFILE：
+
+{profile_md}
+
+---
+
+现在请以你自己的口吻，为 {label} 平台写一段内容。
+要求长度：{length_hint}。
+话题或素材：
+
+{topic.strip()}
+"""
+    try:
+        return llm.chat(
+            [{"role": "system", "content": system}, {"role": "user", "content": user}],
+            temperature=0.7,
+        )
+    except llm.LLMError as e:
+        raise ProfileError(str(e)) from e
+
+
 def read_existing(persona_id: int) -> str | None:
     versions = list_versions(persona_id)
     if not versions:
