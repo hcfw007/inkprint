@@ -1,6 +1,10 @@
 {% extends "layout.html" %}
 {% block title %}{{ persona.name }} · inkprint{% endblock %}
 {% block content %}
+{% if synced_count is not none %}
+  <div class="flash">同步完成 · 抓取 {{ synced_count }} 条内容</div>
+{% endif %}
+
 <h2>{{ persona.name }}</h2>
 {% if persona.description %}<p>{{ persona.description }}</p>{% endif %}
 <p class="muted">创建于 {{ persona.created_at }}</p>
@@ -9,7 +13,10 @@
 {% if sources %}
   <table>
     <thead>
-      <tr><th>平台</th><th>标识</th><th>最近同步</th><th></th></tr>
+      <tr>
+        <th>平台</th><th>标识</th>
+        <th>最近同步</th><th>条数</th><th></th>
+      </tr>
     </thead>
     <tbody>
       {% for s in sources %}
@@ -17,6 +24,7 @@
         <td>{{ s.platform }}</td>
         <td>{{ s.identifier }}</td>
         <td>{{ s.last_synced_at or "—" }}</td>
+        <td>{{ s.last_synced_count if s.last_synced_count is not none else "—" }}</td>
         <td>
           <form method="post"
                 action="/personas/{{ persona.id }}/sources/{{ s.id }}/sync"

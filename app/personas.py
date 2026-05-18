@@ -34,7 +34,8 @@ def list_sources(persona_id: int) -> list[sqlite3.Row]:
     with connect() as conn:
         return conn.execute(
             """
-            SELECT id, platform, identifier, last_synced_at
+            SELECT id, platform, identifier, last_synced_at,
+                   last_synced_count, last_sample_path
             FROM source_bindings
             WHERE persona_id = ?
             ORDER BY id ASC
@@ -64,9 +65,15 @@ def get_source(source_id: int) -> sqlite3.Row | None:
         ).fetchone()
 
 
-def mark_source_synced(source_id: int) -> None:
+def mark_source_synced(source_id: int, item_count: int, sample_path: str) -> None:
     with connect() as conn:
         conn.execute(
-            "UPDATE source_bindings SET last_synced_at = datetime('now') WHERE id = ?",
-            (source_id,),
+            """
+            UPDATE source_bindings
+            SET last_synced_at = datetime('now'),
+                last_synced_count = ?,
+                last_sample_path = ?
+            WHERE id = ?
+            """,
+            (item_count, sample_path, source_id),
         )

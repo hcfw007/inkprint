@@ -47,14 +47,22 @@ async def create_persona(
 
 
 @app.get("/personas/{persona_id}", response_class=HTMLResponse)
-async def show_persona(request: Request, persona_id: int) -> HTMLResponse:
+async def show_persona(
+    request: Request,
+    persona_id: int,
+    synced: int | None = None,
+) -> HTMLResponse:
     persona = personas.get(persona_id)
     if persona is None:
         raise HTTPException(status_code=404, detail="persona not found")
     return templates.TemplateResponse(
         request,
         "personas/show.html",
-        {"persona": persona, "sources": personas.list_sources(persona_id)},
+        {
+            "persona": persona,
+            "sources": personas.list_sources(persona_id),
+            "synced_count": synced,
+        },
     )
 
 
@@ -80,8 +88,11 @@ async def sync_source(persona_id: int, source_id: int) -> RedirectResponse:
     if source["platform"] != "zhihu":
         raise HTTPException(status_code=400, detail=f"unsupported platform: {source['platform']}")
     try:
-        crawler_zhihu.sync(persona_id, source["identifier"])
+        result = crawler_zhihu.sync(persona_id, source["identifier"])
     except crawler_zhihu.CrawlerError as e:
         raise HTTPException(status_code=502, detail=str(e)) from e
-    personas.mark_source_synced(source_id)
-    return RedirectResponse(url=f"/personas/{persona_id}", status_code=303)
+    personas.mark_source_synced(source_id, result.item_count, str(result.sample_path))
+    return RedirectResponse(
+        url=f"/personas/{persona_id}?synced={result.item_count}",
+        status_code=303,
+    )

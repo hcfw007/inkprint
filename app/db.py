@@ -25,16 +25,30 @@ CREATE TABLE IF NOT EXISTS source_bindings (
     platform TEXT NOT NULL,
     identifier TEXT NOT NULL,
     last_synced_at TEXT,
+    last_synced_count INTEGER,
+    last_sample_path TEXT,
     FOREIGN KEY (persona_id) REFERENCES personas(id) ON DELETE CASCADE,
     UNIQUE (persona_id, platform, identifier)
 );
 """
+
+# Lightweight forward migrations for columns added after initial release.
+# Each row: (table, column, DDL fragment). ALTER TABLE ... ADD COLUMN is
+# idempotent-via-introspection: we skip if PRAGMA table_info already lists it.
+COLUMN_MIGRATIONS = (
+    ("source_bindings", "last_synced_count", "INTEGER"),
+    ("source_bindings", "last_sample_path", "TEXT"),
+)
 
 
 def init_db() -> None:
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     with connect() as conn:
         conn.executescript(SCHEMA)
+        for table, column, ddl in COLUMN_MIGRATIONS:
+            existing = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})")}
+            if column not in existing:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}")
 
 
 @contextmanager
