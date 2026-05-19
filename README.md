@@ -41,10 +41,15 @@ brew install uv node
 ```bash
 git clone https://github.com/hcfw007/inkprint.git
 cd inkprint
+
+# macOS / Linux
 ./setup.sh
+
+# Windows（或任何平台）
+python setup.py
 ```
 
-`setup.sh` 是幂等的——重复跑也安全，只会补齐缺的东西。它会：
+脚本是幂等的——重复跑也安全，只会补齐缺的东西。它会：
 
 1. 检查 uv / git / node / Chrome 是否就位
 2. `uv sync` 主项目依赖
