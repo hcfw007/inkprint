@@ -39,29 +39,22 @@ brew install uv node
 ## 安装步骤
 
 ```bash
-# 1. 克隆主项目
 git clone https://github.com/hcfw007/inkprint.git
 cd inkprint
-
-# 2. 装应用层依赖（uv 自动建 venv 并下 Python 3.13）
-uv sync
-
-# 3. 配置 LLM
-cp .env.example .env
-# 编辑 .env 填入 LLM_BASE_URL / LLM_API_KEY / LLM_MODEL，
-# 推荐 DeepSeek（中文便宜稳定）
-
-# 4. 装知乎爬虫子项目（不入主仓库的 git）
-git clone https://github.com/xx-hub/MediaCrawler_zhihu.git crawlers/zhihu
-cd crawlers/zhihu
-uv sync                                  # 装爬虫自己的依赖
-cp config/base_config.example.py config/base_config.py
-cp config/zhihu_config.example.py config/zhihu_config.py
-# 这两个文件的默认值适用，不需要手动改 URL —— 主应用会按需写入
-cd ../..
+./setup.sh
 ```
 
-不需要 `playwright install`——MediaCrawler 配置为通过 CDP 连系统 Chrome，省 500MB 浏览器下载。
+`setup.sh` 是幂等的——重复跑也安全，只会补齐缺的东西。它会：
+
+1. 检查 uv / git / node / Chrome 是否就位
+2. `uv sync` 主项目依赖
+3. clone 知乎爬虫（`crawlers/zhihu/`）+ 装它自己的 venv + 拷贝 example 配置
+4. clone 微博爬虫（`crawlers/weibo/`）+ 建 Python 3.11 venv + pip 装依赖 + 备份默认配置
+5. 没有 `.env` 时从 `.env.example` 拷一份给你填
+
+不需要 `playwright install`——两个爬虫都配置为通过 CDP 连系统 Chrome，省 500MB 浏览器下载。
+
+跑完按提示去编辑 `.env`，然后启动。
 
 ## 启动
 
