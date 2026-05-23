@@ -64,6 +64,25 @@
         white-space: pre-wrap; word-wrap: break-word; overflow-x: auto;
         font-family: ui-monospace, "SF Mono", Menlo, monospace;
       }
+      .busy-overlay {
+        position: fixed; inset: 0;
+        background: rgba(255, 255, 255, 0.88);
+        display: none; align-items: center; justify-content: center;
+        flex-direction: column; gap: 1rem;
+        z-index: 9999;
+        font-size: 0.95rem; color: var(--fg);
+        backdrop-filter: blur(2px);
+      }
+      .busy-overlay.show { display: flex; }
+      .busy-spinner {
+        width: 36px; height: 36px;
+        border: 3px solid var(--border);
+        border-top-color: var(--accent);
+        border-radius: 50%;
+        animation: busy-spin 0.8s linear infinite;
+      }
+      @keyframes busy-spin { to { transform: rotate(360deg); } }
+      form button[disabled] { opacity: 0.6; cursor: not-allowed; }
     </style>
   </head>
   <body>
@@ -75,5 +94,41 @@
       </div>
     </header>
     {% block content %}{% endblock %}
+    <div class="busy-overlay" id="busy-overlay" aria-live="polite" aria-hidden="true">
+      <div class="busy-spinner" aria-hidden="true"></div>
+      <div id="busy-message">处理中…</div>
+    </div>
+    <script>
+      (function () {
+        var overlay = document.getElementById('busy-overlay');
+        var msg = document.getElementById('busy-message');
+        function show(text) {
+          msg.textContent = text;
+          overlay.classList.add('show');
+          overlay.setAttribute('aria-hidden', 'false');
+        }
+        function hide() {
+          overlay.classList.remove('show');
+          overlay.setAttribute('aria-hidden', 'true');
+          document.querySelectorAll('form button[disabled]').forEach(function (b) {
+            b.disabled = false;
+          });
+        }
+        document.addEventListener('submit', function (e) {
+          // inline onsubmit="return confirm(...)" 在 cancel 时会调用 preventDefault，
+          // 这种情况下表单不会真提交，遮罩也不该亮。
+          if (e.defaultPrevented) return;
+          var form = e.target;
+          if (!(form instanceof HTMLFormElement)) return;
+          var text = form.dataset.busy || '处理中，请稍候…';
+          show(text);
+          form.querySelectorAll('button').forEach(function (b) { b.disabled = true; });
+        });
+        // bfcache: 后退回到本页时遮罩还可能挂着，清掉
+        window.addEventListener('pageshow', function (e) {
+          if (e.persisted) hide();
+        });
+      })();
+    </script>
   </body>
 </html>

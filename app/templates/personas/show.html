@@ -40,7 +40,8 @@
         <td style="white-space: nowrap;">
           <form method="post"
                 action="/personas/{{ persona.id }}/sources/{{ s.id }}/sync"
-                style="margin: 0; display: inline-block;">
+                style="margin: 0; display: inline-block;"
+                data-busy="正在同步 {{ s.platform }} 样本，可能需要几十秒到几分钟，请勿重复点击…">
             <button type="submit" style="padding: 0.25rem 0.75rem; font-size: 0.85rem;">
               立即同步
             </button>
@@ -49,6 +50,7 @@
             <form method="post"
                   action="/auth/weibo/clear"
                   style="margin: 0; display: inline-block;"
+                  data-busy="正在清理微博 cookie…"
                   onsubmit="return confirm('清掉缓存的微博 cookie，下次同步会重新弹浏览器登录。确定？');">
               <button type="submit"
                       style="padding: 0.25rem 0.75rem; font-size: 0.85rem;"
@@ -114,13 +116,16 @@
 <h2>Voice Profile</h2>
 {% if profile_md %}
   <pre class="profile">{{ profile_md }}</pre>
-  <form method="post" action="/personas/{{ persona.id }}/profile" style="margin-top: 0.5rem; display: inline-block;">
+  <form method="post" action="/personas/{{ persona.id }}/profile"
+        style="margin-top: 0.5rem; display: inline-block;"
+        data-busy="正在调用 LLM 重新生成 VOICE PROFILE，通常 10~60 秒…">
     <button type="submit">重新生成</button>
   </form>
   <a href="/personas/{{ persona.id }}/profile/versions" style="margin-left: 0.75rem;">查看历史版本 →</a>
 {% else %}
   <div class="empty">尚未生成。需要至少完成一次社媒同步。</div>
-  <form method="post" action="/personas/{{ persona.id }}/profile">
+  <form method="post" action="/personas/{{ persona.id }}/profile"
+        data-busy="正在调用 LLM 生成 VOICE PROFILE，通常 10~60 秒…">
     <button type="submit">生成 voice profile</button>
   </form>
 {% endif %}

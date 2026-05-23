@@ -20,7 +20,8 @@
   </div>
 {% endif %}
 
-<form method="post" action="/personas/{{ persona.id }}/compose">
+<form method="post" action="/personas/{{ persona.id }}/compose"
+      data-busy="正在以这位作者的腔调写作{% if search_enabled %}（可能会联网搜索核实事实）{% endif %}，最长几分钟，请勿重复点击…">
   <label for="form_type">文本类型</label>
   <select id="form_type" name="form_type" required>
     <option value="long" {% if form_type == "long" %}selected{% endif %}>
