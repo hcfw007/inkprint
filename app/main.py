@@ -83,10 +83,11 @@ async def show_persona(
         raise HTTPException(status_code=404, detail="persona not found")
     profile_md = voice_profile.read_existing(persona_id)
     author_text = persona["author_text"] or ""
-    detected_author = ""
-    if profile_md:
-        profile_md = voice_profile.apply_author_overrides(profile_md, author_text)
-        detected_author = voice_profile.extract_author(profile_md)
+    # detected_author 只为兼容旧版 profile（曾经会在 Author 字段塞 LLM 推断），
+    # 新生成的 profile 已不含 Author 行。仅在用户没填 author_text 时拿来当输入框占位。
+    detected_author = (
+        voice_profile.extract_author(profile_md) if (profile_md and not author_text) else ""
+    )
     return templates.TemplateResponse(
         request,
         "personas/show.html",
@@ -174,7 +175,7 @@ async def generate_profile(persona_id: int) -> RedirectResponse:
     if persona is None:
         raise HTTPException(status_code=404, detail="persona not found")
     try:
-        voice_profile.generate(persona_id, author_text=persona["author_text"] or "")
+        voice_profile.generate(persona_id)
     except voice_profile.ProfileError as e:
         raise HTTPException(status_code=502, detail=str(e)) from e
     return RedirectResponse(url=f"/personas/{persona_id}?profile=ok", status_code=303)

@@ -94,6 +94,7 @@ uv run uvicorn app.main:app --reload --port 8765
    - 默认按「主动发起内容」生成；勾上「这是回答问题」才走答题腔
    - 配了 Tavily key 时，模型会**自主调用 web_search** 核实事实再下笔
    - 结果下方有「执行轨迹」折叠面板，能看模型搜了啥 / 调了几次工具
+   - prompt 里会用「你是 {Author 履历}」直接定身份（你填的履历优先，没填则用 profile 里 LLM 推断的 Author 行），VOICE PROFILE 全文作为风格规范
 7. **查看样本**：人格详情页能翻所有原文，按点赞数 / 字数排序
 
 ## 目录结构

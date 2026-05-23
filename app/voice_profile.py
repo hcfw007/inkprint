@@ -16,6 +16,7 @@ from pathlib import Path
 from . import llm, samples, search
 
 AUTHOR_LINE_RE = re.compile(r"^Author\s*[:：]\s*(.*?)\s*$", re.MULTILINE)
+AUTHOR_LINE_FULL_RE = re.compile(r"^Author\s*[:：].*\n?", re.MULTILINE)
 
 ROOT = Path(__file__).resolve().parent.parent
 PROFILES_DIR = ROOT / "profiles"
@@ -140,21 +141,19 @@ def extract_author(profile_md: str) -> str:
     return match.group(1).strip() if match else ""
 
 
-def apply_author_overrides(profile_md: str, author_text: str) -> str:
-    """Overlay the user-confirmed Author line on top of an LLM-generated profile.
+def strip_author(profile_md: str) -> str:
+    """Drop the Author line entirely (line + trailing newline).
 
-    Leaves the file on disk untouched — overlay happens at display time so
-    profile history stays faithful to what the model produced.
+    Used when the author identity is being injected elsewhere (e.g. the
+    `你是 {author}` opener in compose's system prompt) and we don't want it
+    repeated inside the embedded VOICE PROFILE block.
     """
-    if not author_text:
-        return profile_md
-    return AUTHOR_LINE_RE.sub(f"Author: {author_text}", profile_md, count=1)
+    return AUTHOR_LINE_FULL_RE.sub("", profile_md, count=1)
 
 
 def _build_prompt(
     samples_used: list[dict],
     total_count: int,
-    author_text: str = "",
 ) -> list[dict[str, str]]:
     formatted = [_format_sample(i, s) for i, s in enumerate(samples_used, 1)]
     samples_block = "\n\n---\n\n".join(formatted)
@@ -168,30 +167,24 @@ def _build_prompt(
         "— every claim should be observable in the samples. If the author writes "
         "differently across platforms, call that split out in Channel Notes rather "
         "than averaging it into mush. The samples are in Chinese; the profile MUST "
-        "also be in Chinese."
+        "also be in Chinese. Do NOT include any author bio / identity / 履历 fields — "
+        "downstream code injects the author identity separately."
     )
-
-    confirmed_facts = ""
-    if author_text:
-        confirmed_facts = (
-            "\n以下是用户确认过的作者履历，请在 Author 字段直接使用，不要改写：\n"
-            f"- Author: {author_text}\n"
-        )
 
     user = f"""请基于以下来自同一作者的多平台社媒样本，输出 VOICE PROFILE。
 
 {breakdown}。
-{confirmed_facts}
+
 样本：
 
 {samples_block}
 
-请严格按照以下 schema 输出（markdown，标题保持英文 key，正文用中文）：
+请严格按照以下 schema 输出（markdown，标题保持英文 key，正文用中文）。
+**不要输出 Author / 作者 / 履历 / 身份相关字段** —— 那块由调用方单独维护。
 
 ```
 VOICE PROFILE
 =============
-Author:  <对作者的一段简短画像：身份、年龄段、领域、性格、立场倾向等>
 Goal:    <作者发文的核心目的：分享、辩论、记录、社交等>
 Confidence:  <low | medium | high，结合样本量和一致性判断>
 
@@ -238,14 +231,14 @@ Channel Notes
     ]
 
 
-def generate(persona_id: int, author_text: str = "") -> ProfileResult:
+def generate(persona_id: int) -> ProfileResult:
     samples = _load_samples(persona_id)
     if not samples:
         raise ProfileError("sample file is empty")
     picked = _pick_representative(samples)
     if not picked:
         raise ProfileError(f"no samples passed the minimum length ({SAMPLE_MIN_CHARS} chars)")
-    messages = _build_prompt(picked, total_count=len(samples), author_text=author_text)
+    messages = _build_prompt(picked, total_count=len(samples))
     try:
         profile_md = llm.chat(messages)
     except llm.LLMError as e:
@@ -362,7 +355,6 @@ def compose(
     profile_md = read_existing(persona_id)
     if not profile_md:
         raise ProfileError("尚未生成 voice profile，先生成 profile 再来写")
-    profile_md = apply_author_overrides(profile_md, author_text)
     if not topic.strip():
         raise ProfileError("输入文本不能为空")
     form = COMPOSE_FORMS[form_type]
@@ -399,19 +391,21 @@ def compose(
         )
         scenario = form["scenario"]
 
+    # 身份来源优先级：用户人工 author_text → 旧版 profile 残留的 Author 行 → 兜底
+    author_desc = author_text.strip() or extract_author(profile_md).strip()
+    identity_line = f"你是 {author_desc}。" if author_desc else "你是这位作者本人。"
+    # 旧版 profile 可能仍带 Author 行，剥掉避免和 identity_line 重复
+    profile_for_prompt = strip_author(profile_md).lstrip("\n")
+
     system = (
-        "你是这位作者本人，按下方 VOICE PROFILE 描述的写作风格输出内容。\n"
+        f"{identity_line}\n"
+        "你的写作风格如下（VOICE PROFILE，基于该作者的多源样本提炼，严格按它来写）：\n\n"
+        f"{profile_for_prompt}\n\n"
         f"{stance}\n"
         "严格避开 Banned Moves。输出语言：中文。只输出正文，不要任何解释、标题、前后缀。"
         f"{fact_clause}"
     )
-    user = f"""下面是你的 VOICE PROFILE（基于该作者的多源样本提炼）：
-
-{profile_md}
-
----
-
-【写作场景】
+    user = f"""【写作场景】
 {scenario}
 
 【字数】{form["length"]}
