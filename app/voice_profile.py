@@ -232,9 +232,9 @@ Channel Notes
 
 
 def generate(persona_id: int) -> ProfileResult:
+    # _load_samples() raises ProfileError on an empty sample union — that is the
+    # single empty-check in this pipeline.
     samples = _load_samples(persona_id)
-    if not samples:
-        raise ProfileError("sample file is empty")
     picked = _pick_representative(samples)
     if not picked:
         raise ProfileError(f"no samples passed the minimum length ({SAMPLE_MIN_CHARS} chars)")

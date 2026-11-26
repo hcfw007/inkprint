@@ -162,6 +162,16 @@ class TestGenerate:
         with pytest.raises(voice_profile.ProfileError, match="no samples"):
             voice_profile.generate(1)
 
+    def test_generate_has_no_unreachable_empty_guard(self):
+        """_load_samples() already raises ProfileError on an empty sample union,
+        so any second empty-check inside generate() is dead code with a
+        misleading message ("sample file is empty"). Keep the guard in exactly
+        one place: _load_samples."""
+        import inspect
+
+        src = inspect.getsource(voice_profile.generate)
+        assert "sample file is empty" not in src
+
     def test_generate_no_eligible_samples_raises(self, dump_factory, profiles_dir):
         dump_factory("zhihu", 1, [make_sample(1, text="太短")])
         with pytest.raises(voice_profile.ProfileError, match="minimum length"):
