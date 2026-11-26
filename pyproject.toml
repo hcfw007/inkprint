@@ -9,6 +9,7 @@ dependencies = [
     "json5>=0.14.0",
     "openai>=2.37.0",
     "playwright>=1.59.0",
+    "python-dotenv>=1.0.0",
     "python-multipart>=0.0.29",
     "uvicorn[standard]>=0.47.0",
 ]
