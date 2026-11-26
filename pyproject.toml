@@ -15,8 +15,26 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "pytest>=9.2.0",
+    "pytest-cov>=7.1.0",
     "ruff>=0.15.13",
 ]
+
+[tool.pytest.ini_options]
+# crawlers/ 是 setup.py 克隆的第三方代码（gitignored），其自带的旧测试不进本套件；
+# testpaths + norecursedirs 双保险：本地裸跑 pytest 也不会收集到它们。
+testpaths = ["tests"]
+norecursedirs = ["crawlers", ".venv", "data", "samples", "profiles", "setup.py"]
+pythonpath = ["."]
+addopts = "-q --strict-markers --cov=app --cov-report=term-missing"
+
+[tool.coverage.run]
+source = ["app"]
+branch = false
+
+[tool.coverage.report]
+show_missing = true
+skip_empty = true
 
 [tool.ruff]
 line-length = 100

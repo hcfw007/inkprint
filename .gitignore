@@ -28,6 +28,13 @@ __pycache__/
 venv/
 *.egg-info/
 
+# 测试覆盖率产物
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.pytest_cache/
+
 # Node
 node_modules/
 dist/
