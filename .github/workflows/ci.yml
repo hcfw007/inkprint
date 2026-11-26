@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          python-version-file: ".python-version"
+          enable-cache: true
+
+      - name: Sync dependencies
+        run: uv sync
+
+      - name: Ruff lint
+        run: uv run ruff check .
+
+      - name: Ruff format check
+        run: uv run ruff format --check .
+
+      # crawlers/ 是 gitignored 的第三方爬虫（setup.py 克隆），CI 检出中不存在；
+      # 即使本地存在也不会被收集 —— 见 pyproject [tool.pytest.ini_options]
+      # 的 testpaths / norecursedirs。测试全部离线（LLM/网络 mock，socket 被禁）。
+      - name: Pytest
+        run: uv run pytest tests/
