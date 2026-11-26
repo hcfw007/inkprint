@@ -3,7 +3,10 @@
 Isolation guarantees:
 - LLM / Tavily env vars are cleared per-test (app/__init__ runs load_dotenv(),
   so a developer's local .env must not leak into assertions).
-- Raw sockets are blocked: any un-mocked network call fails loudly.
+- Outbound network is blocked at the connect level: any un-mocked network
+  call fails loudly. (socketpair() self-pipes must keep working so asyncio
+  event loops — and FastAPI's TestClient — can start; nothing can reach a
+  remote host without connect/sendto.)
 - samples/ profiles/ data/ are redirected into tmp_path — the real gitignored
   runtime dirs are never touched.
 """
@@ -27,11 +30,21 @@ def _clean_env(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def _no_network(monkeypatch):
+    """Tripwire: real network I/O raises loudly; in-process ASGI stays usable.
+
+    Block at connect/sendto level instead of replacing the socket()
+    constructor: asyncio event loops build socketpair() self-pipes at
+    startup, which a constructor-level block would break — that would make
+    FastAPI's TestClient (and any async code) untestable.
+    """
+
     def _blocked(*_args, **_kwargs):
         raise RuntimeError("network access is blocked in this test suite (all I/O must be mocked)")
 
-    monkeypatch.setattr(socket, "socket", _blocked)
     monkeypatch.setattr(socket, "create_connection", _blocked)
+    monkeypatch.setattr(socket.socket, "connect", _blocked)
+    monkeypatch.setattr(socket.socket, "connect_ex", _blocked)
+    monkeypatch.setattr(socket.socket, "sendto", _blocked)
 
 
 @pytest.fixture()
