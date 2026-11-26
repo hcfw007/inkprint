@@ -12,6 +12,7 @@ import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from urllib.parse import unquote
 
 from . import llm, samples, search
 
@@ -459,5 +460,12 @@ def read_existing(persona_id: int) -> str | None:
 
 def read_version(persona_id: int, name: str) -> str | None:
     _migrate_legacy_flat(persona_id)
-    path = _persona_dir(persona_id) / f"{name}.md"
-    return path.read_text(encoding="utf-8") if path.exists() else None
+    persona_dir = _persona_dir(persona_id).resolve()
+    # `name` comes from a URL path segment: decode once more so %2e%2e%2f-style
+    # encodings cannot dodge the check, then require the resolved target to
+    # stay inside this persona's profile dir (no ../ traversal, no absolute
+    # paths, no symlink escapes).
+    target = (persona_dir / f"{unquote(name)}.md").resolve()
+    if not target.is_relative_to(persona_dir):
+        return None
+    return target.read_text(encoding="utf-8") if target.exists() else None
