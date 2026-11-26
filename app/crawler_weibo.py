@@ -222,7 +222,11 @@ def _harvest(persona_id: int, uid: str) -> CrawlResult:
     raw_path = _latest_output(uid)
     with raw_path.open(encoding="utf-8") as f:
         payload = json.load(f)
-    raw_weibos = payload.get("weibo") if isinstance(payload, dict) else []
+    # 与 crawler_zhihu._harvest 的 `dump if isinstance(dump, list) else []` 保持一致：
+    # 畸形/缺失的上游输出（缺 "weibo" 键、null、非 list）一律视为空结果，
+    # 不让已经跑完的采集在归档阶段炸掉；历史样本经 load_merged 不受影响。
+    raw_weibo = payload.get("weibo") if isinstance(payload, dict) else None
+    raw_weibos = raw_weibo if isinstance(raw_weibo, list) else []
     normalized = [n for n in (_normalize_weibo(w) for w in raw_weibos) if n is not None]
 
     added = updated = unchanged = 0

@@ -243,11 +243,36 @@ class TestHarvest:
         assert [d["content_id"] for d in dumped] == ["1", "2", "3"]
 
     def test_payload_with_empty_weibo_list(self, weibo_env):
-        # 注意：dict 缺 "weibo" 键时 payload.get("weibo") 返回 None，
-        # _harvest 迭代会 TypeError——现存行为，本轮不改业务，仅记录。
         path = cw.OUTPUT_BASE / "12345" / "12345.json"
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text('{"weibo": []}', encoding="utf-8")
+        result = cw._harvest(7, "12345")
+        assert result.item_count == 0
+        assert result.total_count == 0
+
+    def test_payload_missing_weibo_key_counts_zero(self, weibo_env):
+        # dict 缺 "weibo" 键：与 zhihu 对畸形 dump 的处理一致，视为空结果而非 TypeError。
+        path = cw.OUTPUT_BASE / "12345" / "12345.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text('{"ok": 1}', encoding="utf-8")
+        result = cw._harvest(7, "12345")
+        assert result.item_count == 0
+        assert result.total_count == 0
+        assert (result.added_count, result.updated_count, result.unchanged_count) == (0, 0, 0)
+
+    def test_payload_weibo_null_counts_zero(self, weibo_env):
+        path = cw.OUTPUT_BASE / "12345" / "12345.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text('{"weibo": null}', encoding="utf-8")
+        result = cw._harvest(7, "12345")
+        assert result.item_count == 0
+        assert result.total_count == 0
+
+    def test_payload_weibo_non_list_counts_zero(self, weibo_env):
+        # 与 zhihu 的 test_non_list_dump_counts_zero 对齐：非 list 一律按空处理。
+        path = cw.OUTPUT_BASE / "12345" / "12345.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text('{"weibo": "oops"}', encoding="utf-8")
         result = cw._harvest(7, "12345")
         assert result.item_count == 0
         assert result.total_count == 0
