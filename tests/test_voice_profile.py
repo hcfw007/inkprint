@@ -318,3 +318,44 @@ class TestVersions:
         self._write(profiles_dir / "7", "20260101T000000Z", "内容甲")
         assert voice_profile.read_version(7, "20260101T000000Z") == "内容甲"
         assert voice_profile.read_version(7, "nope") is None
+
+
+class TestReadVersionPathSafety:
+    """read_version 的 name 来自 URL 路径段，必须防路径穿越。
+
+    攻击用例：`../` 字面穿越、`..%2f` 编码穿越、绝对路径、目录内 symlink 外逃。
+    """
+
+    def _write(self, persona_dir, name, text):
+        persona_dir.mkdir(parents=True, exist_ok=True)
+        path = persona_dir / f"{name}.md"
+        path.write_text(text, encoding="utf-8")
+        return path
+
+    def test_dotdot_traversal_cannot_read_other_persona(self, profiles_dir):
+        self._write(profiles_dir / "6", "20260101T000000Z", "别人的秘密")
+        (profiles_dir / "7").mkdir(parents=True, exist_ok=True)
+        assert voice_profile.read_version(7, "../6/20260101T000000Z") is None
+
+    def test_url_encoded_traversal_cannot_read_other_persona(self, profiles_dir):
+        """`..%2f` 解码后就是 `../`，必须与字面穿越同等对待。"""
+        self._write(profiles_dir / "6", "20260101T000000Z", "别人的秘密")
+        (profiles_dir / "7").mkdir(parents=True, exist_ok=True)
+        assert voice_profile.read_version(7, "..%2f6%2f20260101T000000Z") is None
+
+    def test_absolute_path_is_rejected(self, profiles_dir, tmp_path):
+        secret = self._write(tmp_path, "outside", "越权内容")
+        assert voice_profile.read_version(7, str(secret.with_suffix(""))) is None
+
+    def test_symlink_inside_persona_dir_cannot_escape(self, profiles_dir):
+        secret = self._write(profiles_dir / "6", "20260101T000000Z", "别人的秘密")
+        persona_dir = profiles_dir / "7"
+        persona_dir.mkdir(parents=True, exist_ok=True)
+        (persona_dir / "evil.md").symlink_to(secret)
+        assert voice_profile.read_version(7, "evil") is None
+
+    def test_symlink_within_persona_dir_stays_readable(self, profiles_dir):
+        """同目录内别名 symlink 是合法用法，不因加固被误伤。"""
+        real = self._write(profiles_dir / "7", "20260101T000000Z", "内容甲")
+        (profiles_dir / "7" / "alias.md").symlink_to(real)
+        assert voice_profile.read_version(7, "alias") == "内容甲"
