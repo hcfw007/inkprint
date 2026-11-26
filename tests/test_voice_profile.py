@@ -52,6 +52,17 @@ class TestPickRepresentative:
     def test_empty_input_returns_empty(self):
         assert voice_profile._pick_representative([]) == []
 
+    def test_param_does_not_shadow_samples_module(self):
+        """The parameter must not be named `samples`: voice_profile imports the
+        app.samples module under that name, and shadowing it makes any future
+        samples.load_merged() reference inside the function silently bind to the
+        argument list instead."""
+        import inspect
+
+        params = list(inspect.signature(voice_profile._pick_representative).parameters)
+        assert "samples" not in params
+        assert params == ["items"]
+
 
 class TestAuthorLine:
     def test_extract_author_ascii_colon(self):

@@ -79,7 +79,7 @@ def _load_samples(persona_id: int) -> list[dict]:
     return items
 
 
-def _pick_representative(samples: list[dict]) -> list[dict]:
+def _pick_representative(items: list[dict]) -> list[dict]:
     """Pick up to SAMPLE_PICK_LIMIT items, biased toward substantive posts but
     balanced across platforms so a chatty long-form source does not starve
     out a terser short-form one.
@@ -89,7 +89,7 @@ def _pick_representative(samples: list[dict]) -> list[dict]:
     """
     eligible = [
         s
-        for s in samples
+        for s in items
         if isinstance(s.get("content_text"), str) and len(s["content_text"]) >= SAMPLE_MIN_CHARS
     ]
     buckets: dict[str, list[dict]] = {}
@@ -234,11 +234,11 @@ Channel Notes
 def generate(persona_id: int) -> ProfileResult:
     # _load_samples() raises ProfileError on an empty sample union — that is the
     # single empty-check in this pipeline.
-    samples = _load_samples(persona_id)
-    picked = _pick_representative(samples)
+    all_samples = _load_samples(persona_id)
+    picked = _pick_representative(all_samples)
     if not picked:
         raise ProfileError(f"no samples passed the minimum length ({SAMPLE_MIN_CHARS} chars)")
-    messages = _build_prompt(picked, total_count=len(samples))
+    messages = _build_prompt(picked, total_count=len(all_samples))
     try:
         profile_md = llm.chat(messages)
     except llm.LLMError as e:
@@ -258,7 +258,7 @@ def generate(persona_id: int) -> ProfileResult:
     profile_path.write_text(profile_md, encoding="utf-8")
     return ProfileResult(
         profile_path=profile_path,
-        sample_count_total=len(samples),
+        sample_count_total=len(all_samples),
         sample_count_used=len(picked),
     )
 
