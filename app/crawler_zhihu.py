@@ -134,15 +134,21 @@ def sync(persona_id: int, zhihu_url: str) -> CrawlResult:
     """
     _rewrite_config(zhihu_url)
     cmd = ["uv", "run", "main.py", "--platform", "zhihu", "--lt", "qrcode", "--type", "creator"]
-    proc = subprocess.run(
-        cmd,
-        cwd=CRAWLER_DIR,
-        env=_clean_env(),
-        capture_output=True,
-        text=True,
-        timeout=CRAWL_TIMEOUT_SECONDS,
-        check=False,
-    )
+    try:
+        proc = subprocess.run(
+            cmd,
+            cwd=CRAWLER_DIR,
+            env=_clean_env(),
+            capture_output=True,
+            text=True,
+            timeout=CRAWL_TIMEOUT_SECONDS,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as e:
+        # 边界统一错误映射：超时包装成 CrawlerError，路由层与其余失败一样映射 502。
+        raise CrawlerError(
+            f"crawler timed out after {CRAWL_TIMEOUT_SECONDS}s"
+        ) from e
     if proc.returncode != 0:
         tail = (proc.stderr or proc.stdout or "")[-2000:]
         raise CrawlerError(f"crawler exited with code {proc.returncode}:\n{tail}")

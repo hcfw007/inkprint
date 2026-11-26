@@ -265,15 +265,21 @@ def sync(persona_id: int, uid: str, cookie: str) -> CrawlResult:
             "`cd crawlers/weibo && uv venv --python 3.11 .venv && "
             "uv pip install -r requirements.txt`."
         )
-    proc = subprocess.run(
-        [str(venv_python), "weibo.py"],
-        cwd=CRAWLER_DIR,
-        env=_clean_env(),
-        capture_output=True,
-        text=True,
-        timeout=CRAWL_TIMEOUT_SECONDS,
-        check=False,
-    )
+    try:
+        proc = subprocess.run(
+            [str(venv_python), "weibo.py"],
+            cwd=CRAWLER_DIR,
+            env=_clean_env(),
+            capture_output=True,
+            text=True,
+            timeout=CRAWL_TIMEOUT_SECONDS,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as e:
+        # 边界统一错误映射：超时包装成 CrawlerError，路由层与其余失败一样映射 502。
+        raise CrawlerError(
+            f"weibo crawler timed out after {CRAWL_TIMEOUT_SECONDS}s"
+        ) from e
     if proc.returncode != 0:
         tail = (proc.stderr or proc.stdout or "")[-2000:]
         raise CrawlerError(f"weibo crawler exited {proc.returncode}:\n{tail}")

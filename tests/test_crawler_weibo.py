@@ -348,12 +348,15 @@ class TestSync:
         assert "B" * 2000 in str(excinfo.value)
         assert "A" * 2500 not in str(excinfo.value)
 
-    def test_timeout_expires_propagates_unwrapped(self, weibo_env, monkeypatch):
+    def test_timeout_expires_wrapped_as_crawler_error(self, weibo_env, monkeypatch):
+        # 行为变更：TimeoutExpired 不再透传，包装成 CrawlerError（含超时秒数），
+        # 路由层统一走既有 502 映射。原「透传」用例已按新行为更新。
         write_template()
         venv_python = weibo_env / ".venv" / "bin" / "python"
         venv_python.parent.mkdir(parents=True)
         venv_python.touch()
         error = subprocess.TimeoutExpired(cmd="weibo.py", timeout=cw.CRAWL_TIMEOUT_SECONDS)
         fake_run(monkeypatch, error=error)
-        with pytest.raises(subprocess.TimeoutExpired):
+        with pytest.raises(cw.CrawlerError, match=r"timed out after 900s") as excinfo:
             cw.sync(7, "12345", "COOKIE=1")
+        assert isinstance(excinfo.value.__cause__, subprocess.TimeoutExpired)
