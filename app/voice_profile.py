@@ -60,7 +60,7 @@ class ProfileResult:
 
 @dataclass(frozen=True)
 class ProfileVersion:
-    name: str  # filename without extension, e.g. "20260518T123456Z"
+    name: str  # filename without extension, e.g. "20260518T123456.123Z"
     created_at: str  # human-readable
     path: Path
 
@@ -246,8 +246,15 @@ def generate(persona_id: int) -> ProfileResult:
 
     persona_dir = _persona_dir(persona_id)
     persona_dir.mkdir(parents=True, exist_ok=True)
-    timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
-    profile_path = persona_dir / f"{timestamp}.md"
+    now = datetime.now(UTC)
+    stem = f"{now.strftime('%Y%m%dT%H%M%S')}.{now.microsecond // 1000:03d}Z"
+    profile_path = persona_dir / f"{stem}.md"
+    # 同一秒（甚至同一毫秒）内两次生成不允许互相覆盖：毫秒不够就加序号后缀。
+    # 后缀用 _NNN：glob 按文件名排序，_N 必须排在 ".md" 之后才能保持"最新在最上"。
+    seq = 1
+    while profile_path.exists():
+        profile_path = persona_dir / f"{stem}_{seq:03d}.md"
+        seq += 1
     profile_path.write_text(profile_md, encoding="utf-8")
     return ProfileResult(
         profile_path=profile_path,
@@ -257,12 +264,19 @@ def generate(persona_id: int) -> ProfileResult:
 
 
 def format_ts(stem: str) -> str:
-    """Render a 20260518T123456Z stem as 2026-05-18 12:34:56 UTC, best effort."""
-    try:
-        dt = datetime.strptime(stem, "%Y%m%dT%H%M%SZ").replace(tzinfo=UTC)
-        return dt.strftime("%Y-%m-%d %H:%M:%S UTC")
-    except ValueError:
-        return stem
+    """Render a profile stem as human-readable UTC time, best effort.
+
+    Understands current stems (20260518T123456.123Z, plus a _NNN collision
+    suffix) and legacy second-precision stems (20260518T123456Z).
+    """
+    base = re.sub(r"[_-]\d+$", "", stem)
+    for pattern in ("%Y%m%dT%H%M%S.%fZ", "%Y%m%dT%H%M%SZ"):
+        try:
+            dt = datetime.strptime(base, pattern).replace(tzinfo=UTC)
+            return dt.strftime("%Y-%m-%d %H:%M:%S UTC")
+        except ValueError:
+            continue
+    return stem
 
 
 def list_versions(persona_id: int) -> list[ProfileVersion]:

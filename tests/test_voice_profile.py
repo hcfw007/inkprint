@@ -177,10 +177,66 @@ class TestGenerate:
         with pytest.raises(voice_profile.ProfileError, match="api down"):
             voice_profile.generate(1)
 
+    def test_generate_twice_in_same_second_keeps_both_versions(
+        self, dump_factory, profiles_dir, monkeypatch
+    ):
+        """Two generates inside the same second must not overwrite each other."""
+        from datetime import datetime
+
+        self._dump_eligible(dump_factory)
+
+        class FrozenDatetime(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return cls(2026, 5, 18, 12, 34, 56, 123000, tzinfo=tz)
+
+        monkeypatch.setattr(voice_profile, "datetime", FrozenDatetime)
+        replies = iter(["VOICE PROFILE 甲", "VOICE PROFILE 乙"])
+        monkeypatch.setattr(
+            voice_profile.llm, "chat", lambda messages, temperature=0.3: next(replies)
+        )
+
+        first = voice_profile.generate(1)
+        second = voice_profile.generate(1)
+
+        assert first.profile_path != second.profile_path
+        assert first.profile_path.read_text(encoding="utf-8") == "VOICE PROFILE 甲"
+        assert second.profile_path.read_text(encoding="utf-8") == "VOICE PROFILE 乙"
+        versions = voice_profile.list_versions(1)
+        assert len(versions) == 2
+        # 最新的（第二次生成）排最前
+        assert versions[0].path == second.profile_path
+        assert voice_profile.read_existing(1) == "VOICE PROFILE 乙"
+
+    def test_generate_filename_carries_milliseconds(self, dump_factory, profiles_dir, monkeypatch):
+        from datetime import datetime
+
+        self._dump_eligible(dump_factory)
+
+        class FrozenDatetime(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return cls(2026, 5, 18, 12, 34, 56, 123000, tzinfo=tz)
+
+        monkeypatch.setattr(voice_profile, "datetime", FrozenDatetime)
+        monkeypatch.setattr(
+            voice_profile.llm, "chat", lambda messages, temperature=0.3: "VOICE PROFILE"
+        )
+        result = voice_profile.generate(1)
+        assert result.profile_path.stem == "20260518T123456.123Z"
+        # 新 stem 仍能被 format_ts 解析
+        assert voice_profile.format_ts(result.profile_path.stem) == "2026-05-18 12:34:56 UTC"
+
 
 class TestFormatTs:
     def test_valid_stem(self):
         assert voice_profile.format_ts("20260518T123456Z") == "2026-05-18 12:34:56 UTC"
+
+    def test_millisecond_stem(self):
+        assert voice_profile.format_ts("20260518T123456.123Z") == "2026-05-18 12:34:56 UTC"
+
+    def test_collision_suffix_stripped(self):
+        assert voice_profile.format_ts("20260518T123456.123Z_001") == "2026-05-18 12:34:56 UTC"
 
     def test_invalid_stem_passthrough(self):
         assert voice_profile.format_ts("not-a-ts") == "not-a-ts"
