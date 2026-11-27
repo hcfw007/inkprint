@@ -6,6 +6,7 @@ subprocess / 文件系统边界全部 mock：不真起爬虫、不碰 crawlers/ 
 
 import json
 import subprocess
+import warnings
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -250,32 +251,73 @@ class TestHarvest:
         assert result.item_count == 0
         assert result.total_count == 0
 
-    def test_payload_missing_weibo_key_counts_zero(self, weibo_env):
-        # dict 缺 "weibo" 键：与 zhihu 对畸形 dump 的处理一致，视为空结果而非 TypeError。
+    def test_payload_not_dict_counts_zero_and_warns(self, weibo_env):
+        # 顶层就不是 dict（如裸 list）：按空结果处理，同时发出结构化告警。
+        path = cw.OUTPUT_BASE / "12345" / "12345.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("[1, 2]", encoding="utf-8")
+        with pytest.warns(cw.CrawlerDumpWarning, match="reason=payload_not_dict") as record:
+            result = cw._harvest(7, "12345")
+        assert result.item_count == 0
+        assert "skipped_non_dict=0" in str(record[0].message)
+
+    def test_payload_missing_weibo_key_counts_zero_and_warns(self, weibo_env):
+        # dict 缺 "weibo" 键：与 zhihu 对畸形 dump 的处理一致，视为空结果而非 TypeError；
+        # 但不再静默归档空文件，必须发出告警。
         path = cw.OUTPUT_BASE / "12345" / "12345.json"
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text('{"ok": 1}', encoding="utf-8")
-        result = cw._harvest(7, "12345")
+        with pytest.warns(cw.CrawlerDumpWarning, match="reason=missing_weibo_key"):
+            result = cw._harvest(7, "12345")
         assert result.item_count == 0
         assert result.total_count == 0
         assert (result.added_count, result.updated_count, result.unchanged_count) == (0, 0, 0)
 
-    def test_payload_weibo_null_counts_zero(self, weibo_env):
+    def test_payload_weibo_null_counts_zero_and_warns(self, weibo_env):
         path = cw.OUTPUT_BASE / "12345" / "12345.json"
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text('{"weibo": null}', encoding="utf-8")
-        result = cw._harvest(7, "12345")
+        with pytest.warns(cw.CrawlerDumpWarning, match="reason=weibo_not_a_list"):
+            result = cw._harvest(7, "12345")
         assert result.item_count == 0
         assert result.total_count == 0
 
-    def test_payload_weibo_non_list_counts_zero(self, weibo_env):
+    def test_payload_weibo_non_list_counts_zero_and_warns(self, weibo_env):
         # 与 zhihu 的 test_non_list_dump_counts_zero 对齐：非 list 一律按空处理。
         path = cw.OUTPUT_BASE / "12345" / "12345.json"
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text('{"weibo": "oops"}', encoding="utf-8")
-        result = cw._harvest(7, "12345")
+        with pytest.warns(cw.CrawlerDumpWarning, match="reason=weibo_not_a_list"):
+            result = cw._harvest(7, "12345")
         assert result.item_count == 0
         assert result.total_count == 0
+
+    def test_non_dict_elements_skipped_counted_and_warned(self, weibo_env):
+        # 元素级防御：list 里混入字符串/数字/None 时跳过而非 AttributeError，
+        # 跳过数写进同一条告警（reason=non_dict_items）。
+        path = cw.OUTPUT_BASE / "12345" / "12345.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        payload = {"weibo": ["oops", {"id": 1, "text": "第一条足够长的原创微博内容"}, 42, None]}
+        path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+        with pytest.warns(cw.CrawlerDumpWarning) as record:
+            result = cw._harvest(7, "12345")
+        assert result.item_count == 1
+        assert len(record) == 1
+        message = str(record[0].message)
+        assert "reason=non_dict_items" in message
+        assert "skipped_non_dict=3" in message
+
+    def test_clean_dump_emits_no_warning(self, weibo_env):
+        # 正常 dump（含空 list）不产生告警，避免告警噪声稀释信号。
+        write_raw_output("12345", [{"id": 1, "text": "第一条足够长的原创微博内容"}])
+        raw = cw.OUTPUT_BASE / "12345" / "12345.json"
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            result = cw._harvest(7, "12345")
+            raw.write_text('{"weibo": []}', encoding="utf-8")
+            cw._harvest(7, "12345")
+        assert result.item_count == 1
+        assert not [w for w in caught if issubclass(w.category, cw.CrawlerDumpWarning)]
 
 
 class TestSync:

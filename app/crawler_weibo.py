@@ -14,6 +14,7 @@ import os
 import re
 import shutil
 import subprocess
+import warnings
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -83,6 +84,14 @@ CRAWL_TIMEOUT_SECONDS = 900
 
 class CrawlerError(RuntimeError):
     """Anything that goes wrong inside the weibo crawler boundary."""
+
+
+class CrawlerDumpWarning(UserWarning):
+    """Malformed or partially unusable upstream dump, harvested defensively.
+
+    Kept as a warning (not an error) on purpose: a weird dump must not abort
+    an already-finished crawl, but it must not vanish silently either.
+    """
 
 
 @dataclass(frozen=True)
@@ -208,6 +217,20 @@ def _normalize_weibo(item: dict) -> dict | None:
     }
 
 
+def _warn_bad_dump(uid: str, raw_path: Path, reason: str, skipped_non_dict: int) -> None:
+    """Emit one structured warning about a malformed / partially-skipped dump.
+
+    项目无 logging 设施，warnings 是最小方案：stdlib、pytest.warns 可断言、
+    -W / PYTHONWARNINGS 可控，正常路径零噪声。消息为单行 key=value 便于 grep。
+    """
+    warnings.warn(
+        f"crawler_weibo: malformed dump uid={uid} path={raw_path} "
+        f"reason={reason} skipped_non_dict={skipped_non_dict}",
+        CrawlerDumpWarning,
+        stacklevel=2,
+    )
+
+
 def _harvest(persona_id: int, uid: str) -> CrawlResult:
     SAMPLES_DIR.mkdir(parents=True, exist_ok=True)
     persona_dir = SAMPLES_DIR / str(persona_id)
@@ -225,9 +248,28 @@ def _harvest(persona_id: int, uid: str) -> CrawlResult:
     # 与 crawler_zhihu._harvest 的 `dump if isinstance(dump, list) else []` 保持一致：
     # 畸形/缺失的上游输出（缺 "weibo" 键、null、非 list）一律视为空结果，
     # 不让已经跑完的采集在归档阶段炸掉；历史样本经 load_merged 不受影响。
-    raw_weibo = payload.get("weibo") if isinstance(payload, dict) else None
-    raw_weibos = raw_weibo if isinstance(raw_weibo, list) else []
-    normalized = [n for n in (_normalize_weibo(w) for w in raw_weibos) if n is not None]
+    # 但不再静默归档空文件：畸形 dump 与非 dict 元素统一经 _warn_bad_dump 告警计数。
+    if not isinstance(payload, dict):
+        raw_weibos, bad_reason = [], "payload_not_dict"
+    elif "weibo" not in payload:
+        raw_weibos, bad_reason = [], "missing_weibo_key"
+    elif not isinstance(payload["weibo"], list):
+        raw_weibos, bad_reason = [], "weibo_not_a_list"
+    else:
+        raw_weibos, bad_reason = payload["weibo"], None
+
+    normalized: list[dict] = []
+    skipped_non_dict = 0
+    for weibo in raw_weibos:
+        if not isinstance(weibo, dict):
+            # 元素级防御：混入字符串/数字/None 时跳过计数，而非让 .get 炸 AttributeError。
+            skipped_non_dict += 1
+            continue
+        item = _normalize_weibo(weibo)
+        if item is not None:
+            normalized.append(item)
+    if bad_reason is not None or skipped_non_dict:
+        _warn_bad_dump(uid, raw_path, bad_reason or "non_dict_items", skipped_non_dict)
 
     added = updated = unchanged = 0
     for item in normalized:
