@@ -19,9 +19,12 @@ uv run uvicorn app.main:app --reload --port 8765
 # Lint / format (Ruff config in pyproject.toml; crawlers/ is excluded)
 uv run ruff check . --fix
 uv run ruff format .
+
+# Tests (pytest + pytest-cov; fully offline — LLM/network mocked, sockets blocked)
+uv run pytest             # collection root is tests/ only (see [tool.pytest.ini_options])
 ```
 
-No test suite exists yet. There is no `pytest` configured — do not invent test commands.
+Tests live in `tests/` and must stay offline: `app/llm.py` and `app/search.py` are mocked, and `tests/conftest.py` blocks raw sockets. The third-party `crawlers/` tree (gitignored, cloned by `setup.py`) carries its own stale tests — they are never collected (`testpaths` + `norecursedirs`) and never reach CI.
 
 ## Runtime prerequisites the code assumes
 

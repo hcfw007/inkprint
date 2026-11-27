@@ -12,6 +12,7 @@ import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from urllib.parse import unquote
 
 from . import llm, samples, search
 
@@ -60,7 +61,7 @@ class ProfileResult:
 
 @dataclass(frozen=True)
 class ProfileVersion:
-    name: str  # filename without extension, e.g. "20260518T123456Z"
+    name: str  # filename without extension, e.g. "20260518T123456.123Z"
     created_at: str  # human-readable
     path: Path
 
@@ -79,7 +80,7 @@ def _load_samples(persona_id: int) -> list[dict]:
     return items
 
 
-def _pick_representative(samples: list[dict]) -> list[dict]:
+def _pick_representative(items: list[dict]) -> list[dict]:
     """Pick up to SAMPLE_PICK_LIMIT items, biased toward substantive posts but
     balanced across platforms so a chatty long-form source does not starve
     out a terser short-form one.
@@ -89,7 +90,7 @@ def _pick_representative(samples: list[dict]) -> list[dict]:
     """
     eligible = [
         s
-        for s in samples
+        for s in items
         if isinstance(s.get("content_text"), str) and len(s["content_text"]) >= SAMPLE_MIN_CHARS
     ]
     buckets: dict[str, list[dict]] = {}
@@ -232,13 +233,13 @@ Channel Notes
 
 
 def generate(persona_id: int) -> ProfileResult:
-    samples = _load_samples(persona_id)
-    if not samples:
-        raise ProfileError("sample file is empty")
-    picked = _pick_representative(samples)
+    # _load_samples() raises ProfileError on an empty sample union — that is the
+    # single empty-check in this pipeline.
+    all_samples = _load_samples(persona_id)
+    picked = _pick_representative(all_samples)
     if not picked:
         raise ProfileError(f"no samples passed the minimum length ({SAMPLE_MIN_CHARS} chars)")
-    messages = _build_prompt(picked, total_count=len(samples))
+    messages = _build_prompt(picked, total_count=len(all_samples))
     try:
         profile_md = llm.chat(messages)
     except llm.LLMError as e:
@@ -246,23 +247,37 @@ def generate(persona_id: int) -> ProfileResult:
 
     persona_dir = _persona_dir(persona_id)
     persona_dir.mkdir(parents=True, exist_ok=True)
-    timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
-    profile_path = persona_dir / f"{timestamp}.md"
+    now = datetime.now(UTC)
+    stem = f"{now.strftime('%Y%m%dT%H%M%S')}.{now.microsecond // 1000:03d}Z"
+    profile_path = persona_dir / f"{stem}.md"
+    # 同一秒（甚至同一毫秒）内两次生成不允许互相覆盖：毫秒不够就加序号后缀。
+    # 后缀用 _NNN：glob 按文件名排序，_N 必须排在 ".md" 之后才能保持"最新在最上"。
+    seq = 1
+    while profile_path.exists():
+        profile_path = persona_dir / f"{stem}_{seq:03d}.md"
+        seq += 1
     profile_path.write_text(profile_md, encoding="utf-8")
     return ProfileResult(
         profile_path=profile_path,
-        sample_count_total=len(samples),
+        sample_count_total=len(all_samples),
         sample_count_used=len(picked),
     )
 
 
 def format_ts(stem: str) -> str:
-    """Render a 20260518T123456Z stem as 2026-05-18 12:34:56 UTC, best effort."""
-    try:
-        dt = datetime.strptime(stem, "%Y%m%dT%H%M%SZ").replace(tzinfo=UTC)
-        return dt.strftime("%Y-%m-%d %H:%M:%S UTC")
-    except ValueError:
-        return stem
+    """Render a profile stem as human-readable UTC time, best effort.
+
+    Understands current stems (20260518T123456.123Z, plus a _NNN collision
+    suffix) and legacy second-precision stems (20260518T123456Z).
+    """
+    base = re.sub(r"[_-]\d+$", "", stem)
+    for pattern in ("%Y%m%dT%H%M%S.%fZ", "%Y%m%dT%H%M%SZ"):
+        try:
+            dt = datetime.strptime(base, pattern).replace(tzinfo=UTC)
+            return dt.strftime("%Y-%m-%d %H:%M:%S UTC")
+        except ValueError:
+            continue
+    return stem
 
 
 def list_versions(persona_id: int) -> list[ProfileVersion]:
@@ -445,5 +460,12 @@ def read_existing(persona_id: int) -> str | None:
 
 def read_version(persona_id: int, name: str) -> str | None:
     _migrate_legacy_flat(persona_id)
-    path = _persona_dir(persona_id) / f"{name}.md"
-    return path.read_text(encoding="utf-8") if path.exists() else None
+    persona_dir = _persona_dir(persona_id).resolve()
+    # `name` comes from a URL path segment: decode once more so %2e%2e%2f-style
+    # encodings cannot dodge the check, then require the resolved target to
+    # stay inside this persona's profile dir (no ../ traversal, no absolute
+    # paths, no symlink escapes).
+    target = (persona_dir / f"{unquote(name)}.md").resolve()
+    if not target.is_relative_to(persona_dir):
+        return None
+    return target.read_text(encoding="utf-8") if target.exists() else None
